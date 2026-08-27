@@ -1,26 +1,388 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+/* ==========================================================================
+   VedaAI design tokens — sourced verbatim from the Figma file's GLOBAL_VARS
+   (VedaAI Hiring Assignment · "Extraction flow" section).
+   Every screen pulls from these; do not hardcode hex values in components.
+   ========================================================================== */
+
+:root {
+  /* --- Primary / brand ------------------------------------------------- */
+  --veda-orange: #ff5623;                 /* Primary/primary - Orange        */
+  --veda-orange-gradient: linear-gradient(172deg, rgba(251, 151, 93, 1) 0%, rgba(252, 94, 36, 1) 83%);
+
+  /* --- Neutrals / text -------------------------------------------------- */
+  --veda-dark-grey: #2b2b2b;              /* Background/Dark-Grey            */
+  --veda-dark-grey-80: rgba(43, 43, 43, 0.8);
+  --veda-text-primary: #303030;           /* Text/Primary                    */
+  --veda-text-secondary: rgba(94, 94, 94, 0.8);
+  --veda-text-muted: rgba(94, 94, 94, 0.55);
+  --veda-text-inverse: #ffffff;
+  --veda-bg-dark: #5e5e5e;                /* Background/bg-dark              */
+  --veda-disabled: #a9a9a9;               /* Background/disabled             */
+
+  /* --- Surfaces --------------------------------------------------------- */
+  --veda-white: #ffffff;
+  --veda-white-80: rgba(255, 255, 255, 0.8);
+  --veda-white-75: rgba(255, 255, 255, 0.75);
+  --veda-white-50: rgba(255, 255, 255, 0.5);
+  --veda-white-25: rgba(255, 255, 255, 0.25);
+  --veda-white-15: rgba(255, 255, 255, 0.15);
+  --veda-white-10: rgba(255, 255, 255, 0.1);
+  --veda-offwhite-primary: #f6f6f6;       /* Background/bg-off white primary */
+  --veda-offwhite-20: #f0f0f0;            /* Background/bg-off white 20%     */
+  --veda-offwhite-50: #cecece;            /* Background/bg-off white 50%     */
+  --veda-dropzone-icon-bg: #f3f3f3;       /* fill_c8223be7                   */
+
+  /* --- Buttons ---------------------------------------------------------- */
+  --veda-btn-primary: #181818;            /* Buttons/Buttons Primary         */
+  --veda-btn-primary-85: #303030;         /* Buttons/Primary-85              */
+
+  /* --- Utilities -------------------------------------------------------- */
+  --veda-success: #34ac15;                /* Utilities/Sucess                */
+  --veda-success-10: rgba(69, 181, 41, 0.1);
+
+  /* --- Per-frame backgrounds (three distinct treatments in the file) ----- */
+  /* fill_34b35bf5 — Upload Empty + Upload Filled (desktop) */
+  --veda-bg-upload: linear-gradient(180deg, rgba(245, 245, 245, 1) 0%, rgba(233, 229, 229, 1) 100%);
+  /* Background/bg - Gradient — Loading + Mapping (desktop) and all phone frames */
+  --veda-bg-gradient: linear-gradient(180deg, rgba(238, 238, 238, 1) 0%, rgba(218, 218, 218, 1) 100%);
+
+  /* --- Effects ---------------------------------------------------------- */
+  --veda-ambient-blur: blur(200px);       /* effect_816f4732                 */
+  --veda-shadow-realistic: 0px 32px 48px 0px rgba(0, 0, 0, 0.2), 0px 16px 48px 0px rgba(0, 0, 0, 0.12);
+  --veda-shadow-inset-soft: inset 0px 0px 12.6px 0px rgba(255, 255, 255, 0.1);
+}
+
+/* Retarget shadcn's semantic vars onto the Figma palette so every primitive
+   (button, card, tabs, …) inherits the brand without per-component overrides. */
+:root {
+  --background: var(--veda-offwhite-primary);
+  --foreground: var(--veda-text-primary);
+  --card: var(--veda-white);
+  --card-foreground: var(--veda-text-primary);
+  --popover: var(--veda-white);
+  --popover-foreground: var(--veda-text-primary);
+  --primary: var(--veda-btn-primary);
+  --primary-foreground: var(--veda-white);
+  --secondary: var(--veda-offwhite-20);
+  --secondary-foreground: var(--veda-text-primary);
+  --muted: var(--veda-offwhite-20);
+  --muted-foreground: var(--veda-text-secondary);
+  --accent: var(--veda-orange);
+  --accent-foreground: var(--veda-white);
+  --border: var(--veda-offwhite-50);
+  --input: var(--veda-offwhite-50);
+  --ring: var(--veda-orange);
+  --radius: 1rem;
+}
+
+@theme inline {
+  --color-veda-orange: var(--veda-orange);
+  --color-veda-dark-grey: var(--veda-dark-grey);
+  --color-veda-text: var(--veda-text-primary);
+  --color-veda-text-secondary: var(--veda-text-secondary);
+  --color-veda-text-muted: var(--veda-text-muted);
+  --color-veda-bg-dark: var(--veda-bg-dark);
+  --color-veda-disabled: var(--veda-disabled);
+  --color-veda-offwhite: var(--veda-offwhite-primary);
+  --color-veda-offwhite-20: var(--veda-offwhite-20);
+  --color-veda-offwhite-50: var(--veda-offwhite-50);
+  --color-veda-success: var(--veda-success);
+  --color-veda-btn: var(--veda-btn-primary);
+  --font-veda: var(--font-bricolage), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* --------------------------------------------------------------------------
+   Typography utilities — one class per Figma text style token.
+   -------------------------------------------------------------------------- */
+@layer components {
+  .veda-h1 {
+    font-family: var(--font-veda);
+    font-weight: 700;
+    font-size: 40px;
+    line-height: 1.2;
+    letter-spacing: -0.04em;
+  }
+  .veda-p1 {
+    font-family: var(--font-veda);
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p2-bold {
+    font-family: var(--font-veda);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p3 {
+    font-family: var(--font-veda);
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p3-medium {
+    font-family: var(--font-veda);
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p3-bold {
+    font-family: var(--font-veda);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p4 {
+    font-family: var(--font-veda);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p4-medium {
+    font-family: var(--font-veda);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  .veda-p5 {
+    font-family: var(--font-veda);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.4;
+    letter-spacing: -0.04em;
+  }
+  /* style_a0bcc9d9 — dropzone titles ("Upload Question Paper") */
+  .veda-dropzone-title {
+    font-family: var(--font-veda);
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 22px;
+    letter-spacing: -0.06em;
+  }
+  /* style_2c31010a — helper text ("Max 10MB", subtitle under CTA) */
+  .veda-helper {
+    font-family: var(--font-veda);
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 22px;
+    letter-spacing: -0.06em;
+  }
+  /* style_7cec6c71 — nav / avatar labels */
+  .veda-label-semi {
+    font-family: var(--font-veda);
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: -0.04em;
+  }
+  /* EL-e9cbdd4d — the "VedaAI" wordmark in the sidebar */
+  .veda-wordmark {
+    font-family: var(--font-veda);
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 20px;
+    letter-spacing: -0.06em;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* --------------------------------------------------------------------------
+   Background helpers — apply the exact per-frame fill.
+   -------------------------------------------------------------------------- */
+@layer utilities {
+  .bg-veda-upload {
+    background-image: var(--veda-bg-upload);
+  }
+  .bg-veda-gradient {
+    background-image: var(--veda-bg-gradient);
+  }
+  .bg-veda-orange-gradient {
+    background-image: var(--veda-orange-gradient);
+  }
+  .shadow-veda-realistic {
+    box-shadow: var(--veda-shadow-realistic);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   "Extracting..." shimmer — the gradient fill on Figma EL-97cc1411, animated
+   as a sweep rather than frozen at a single keyframe.
+   -------------------------------------------------------------------------- */
+@layer components {
+  .veda-shimmer {
+    font-family: var(--font-veda);
+    background-image: linear-gradient(
+      90deg,
+      rgba(48, 48, 48, 1) 20%,
+      rgba(96, 96, 96, 1) 40%,
+      rgba(128, 128, 128, 1) 50%,
+      rgba(96, 96, 96, 1) 60%,
+      rgba(48, 48, 48, 1) 80%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: veda-shimmer-sweep 2.4s linear infinite;
+  }
+}
+
+@keyframes veda-shimmer-sweep {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .veda-shimmer {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Low-confidence triage accent. Deliberately muted — a low-confidence match is
+   "worth a glance", not an error, so this sits well short of the red used for
+   withheld marks (#C0350A).
+   -------------------------------------------------------------------------- */
+:root {
+  --veda-amber: #b4731a;
+  --veda-amber-bg: rgba(255, 176, 32, 0.12);
 }
