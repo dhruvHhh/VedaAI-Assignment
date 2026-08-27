@@ -61,12 +61,13 @@ export function FileUpload({
       onDrop={handleDrop}
       className={cn(
         "relative flex min-h-[132px] flex-1 items-center justify-center rounded-[20px] bg-white p-4 lg:p-2.5",
-        "border-[1.5px] border-dashed transition-colors duration-200",
+        // The dashed outline is an SVG stroke, not a CSS border - see
+        // .veda-dashed in globals.css for why.
         isDragging
-          ? "border-[var(--veda-orange)] bg-[rgba(255,86,35,0.04)]"
+          ? "veda-dashed-active bg-[rgba(255,86,35,0.04)]"
           : error
-            ? "border-[#E5484D]"
-            : "border-[var(--veda-offwhite-50)]",
+            ? "veda-dashed-error"
+            : "veda-dashed",
       )}
     >
       <input

@@ -33,8 +33,12 @@ export function AvatarCluster() {
         <Image
           src="/figma/student-avatar.png"
           alt="Student"
-          width={158}
-          height={194}
+          // The rendered box, not the source dimensions: the parent is 57% x
+          // 70.1% of the fixed 138px ring, i.e. 78.7 x 96.7, and this fills it.
+          // next/image sizes its variants from these numbers, so overstating
+          // them makes it serve several times the pixels needed.
+          width={79}
+          height={97}
           className="absolute inset-0 size-full rounded-[52.7px] object-cover object-top"
         />
       </div>

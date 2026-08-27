@@ -1,18 +1,18 @@
 "use client";
 
-import {
-  BookOpen,
-  ClipboardList,
-  FileText,
-  GraduationCap,
-  Home,
-  ChevronsRight,
-  Sparkles,
-  PanelLeft,
-  Settings,
-  Users,
-} from "lucide-react";
+import { ChevronsRight, PanelLeft } from "lucide-react";
 import Image from "next/image";
+import type { ComponentType } from "react";
+import {
+  AiSparkIcon,
+  AiSparkPairIcon,
+  AssignmentsIcon,
+  ExamsIcon,
+  HomeIcon,
+  MyClassroomIcon,
+  MyLibraryIcon,
+  SettingsIcon,
+} from "./figma-icons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,13 +41,39 @@ function VedaLogo({ className }: { className?: string }) {
   );
 }
 
-const NAV_ITEMS = [
-  { label: "Home", icon: Home },
-  { label: "My Classroom", icon: Users },
-  { label: "Assignments", icon: FileText },
-  { label: "Exams", icon: ClipboardList, active: true },
-  { label: "My Library", icon: BookOpen },
+type NavItem = {
+  label: string;
+  /**
+   * A lucide icon, or an inlined Figma icon from ./figma-icons. Both colour
+   * themselves from the parent's text colour, so they are interchangeable here.
+   */
+  icon: ComponentType<{ className?: string }>;
+  active?: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { label: "Home", icon: HomeIcon },
+  { label: "My Classroom", icon: MyClassroomIcon },
+  { label: "Assignments", icon: AssignmentsIcon },
+  { label: "Exams", icon: ExamsIcon, active: true },
+  { label: "My Library", icon: MyLibraryIcon },
 ];
+
+/**
+ * The school crest. Unlike the nav icons this is full-colour artwork, so it
+ * keeps its own palette and is loaded as an image rather than inlined.
+ */
+function SchoolCrest({ className }: { className?: string }) {
+  return (
+    <Image
+      src="/DPS.svg"
+      alt="Delhi Public School"
+      width={59}
+      height={60}
+      className={cn("object-contain", className)}
+    />
+  );
+}
 
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   // The Loading and Mapping frames both use the 64px icon-only rail
@@ -88,8 +114,11 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
               border: "4px solid transparent",
             }}
           >
-            <span className="text-[16px] font-medium leading-7 tracking-[-0.04em] text-white">
-              AI Teacher&rsquo;s Toolkit
+            <span className="flex items-center gap-2 text-white">
+              <AiSparkPairIcon className="h-[18px] w-[19px] shrink-0" />
+              <span className="text-[16px] font-medium leading-7 tracking-[-0.04em]">
+                AI Teacher&rsquo;s Toolkit
+              </span>
             </span>
           </div>
         </div>
@@ -119,13 +148,13 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           type="button"
           className="veda-p3 flex items-center gap-2 rounded-lg px-3 py-2 text-left text-[var(--veda-text-secondary)] hover:bg-[var(--veda-offwhite-20)]/60"
         >
-          <Settings className="size-5 shrink-0" />
+          <SettingsIcon className="size-5 shrink-0" />
           Settings
         </button>
 
         <div className="flex items-center gap-2 rounded-2xl bg-[var(--veda-offwhite-20)] p-3">
           <div className="grid size-[59px] shrink-0 place-items-center rounded-lg bg-white">
-            <GraduationCap className="size-7 text-[var(--veda-text-secondary)]" />
+            <SchoolCrest className="size-11" />
           </div>
           <div className="min-w-0">
             <p className="veda-p3-bold truncate text-[var(--veda-text-primary)]">
@@ -151,9 +180,20 @@ function CollapsedSidebar() {
       <div className="flex flex-col items-center gap-14">
         <VedaLogo />
 
-        <div className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[#272727]">
-          <Sparkles className="size-[18px] text-white" />
-        </div>
+        {/*
+          The collapsed form of the "AI Teacher's Toolkit" pill. It uses the
+          single sparkle rather than the pill's twin-sparkle lockup: that mark
+          runs corner to corner and reads lopsided once centred in a circle at
+          this size.
+        */}
+        <button
+          type="button"
+          aria-label="AI Teacher's Toolkit"
+          title="AI Teacher's Toolkit"
+          className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[#272727] transition-opacity hover:opacity-90"
+        >
+          <AiSparkIcon className="size-[18px] text-white" />
+        </button>
 
         <nav className="flex flex-col items-center gap-2">
           {NAV_ITEMS.map(({ label, icon: Icon, active }) => (
@@ -177,7 +217,7 @@ function CollapsedSidebar() {
 
       <div className="flex flex-col items-center gap-2">
         <div className="grid size-9 place-items-center rounded-lg bg-[var(--veda-offwhite-20)]">
-          <GraduationCap className="size-5 text-[var(--veda-text-secondary)]" />
+          <SchoolCrest className="size-6" />
         </div>
         <button
           type="button"

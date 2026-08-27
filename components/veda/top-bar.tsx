@@ -1,20 +1,35 @@
 "use client";
 
+import { ArrowLeft, ChevronDown, Menu } from "lucide-react";
+import Image from "next/image";
 import {
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  ChevronDown,
-  ClipboardList,
-  Menu,
-  Sparkles,
-} from "lucide-react";
+  AiSparkIcon,
+  ExamsIcon,
+  NotificationIcon,
+  QuestionMarkIcon,
+} from "./figma-icons";
+
+/**
+ * The signed-in user's avatar. Full-colour artwork with an embedded raster, so
+ * it is loaded as an image rather than inlined like the monochrome icons.
+ */
+function UserAvatar({ className }: { className?: string }) {
+  return (
+    <Image
+      src="/User-icon.svg"
+      alt="Dhruv Honwad"
+      width={32}
+      height={32}
+      className={className}
+    />
+  );
+}
 
 /**
  * Top bar.
  *
  * Desktop (Figma 1:8523): a 1100x56 pill, rgba(255,255,255,0.75), 16px radius,
- * holding back/forward, the section label, help, notifications, an AI action
+ * holding back, the section label, help, notifications, an AI action
  * and the user chip.
  *
  * Phone (Figma 1:10514/1:10515): a 373x56 white 16px-radius bar with the
@@ -46,56 +61,46 @@ export function TopBar({ title = "Exams" }: { title?: string }) {
     <>
       {/* ---------------------------- desktop ------------------------------ */}
       <header className="hidden h-14 shrink-0 items-center gap-2.5 rounded-2xl bg-[var(--veda-white-75)] py-0 pl-6 pr-2 lg:flex">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="Back"
-            className="grid size-10 place-items-center rounded-full bg-white transition-colors hover:bg-[var(--veda-offwhite-20)]"
-          >
-            <ArrowLeft className="size-6" />
-          </button>
-          <button
-            type="button"
-            aria-label="Forward"
-            className="grid size-6 place-items-center text-[var(--veda-text-secondary)]"
-          >
-            <ArrowRight className="size-6" />
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label="Back"
+          className="grid size-10 shrink-0 place-items-center rounded-full bg-white transition-colors hover:bg-[var(--veda-offwhite-20)]"
+        >
+          <ArrowLeft className="size-6" />
+        </button>
 
         <div className="flex flex-1 items-center gap-2">
-          <ClipboardList className="size-5 text-[var(--veda-disabled)]" />
+          <ExamsIcon className="size-5 text-[var(--veda-disabled)]" />
           <span className="veda-label-semi text-[var(--veda-disabled)]">
             {title}
           </span>
         </div>
 
         <CircleButton label="Help">
-          <span className="grid size-6 place-items-center rounded-full border-2 border-[var(--veda-text-primary)] text-[16px] font-bold leading-none">
-            ?
-          </span>
+          <QuestionMarkIcon className="size-6" />
         </CircleButton>
 
-        <CircleButton label="Notifications">
-          <Bell className="size-5" />
-          <span className="bg-veda-orange absolute right-1.5 top-1 size-2 rounded-full" />
-        </CircleButton>
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+        >
+          <NotificationIcon className="size-9" />
+        </button>
 
         <button
           type="button"
           aria-label="Ask AI"
           className="grid size-9 shrink-0 place-items-center rounded-full bg-white"
         >
-          <Sparkles className="size-5 text-[var(--veda-dark-grey)]" />
+          <AiSparkIcon className="size-5 text-[var(--veda-dark-grey)]" />
         </button>
 
         <button
           type="button"
           className="flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors hover:bg-white/60"
         >
-          <span className="grid size-9 place-items-center rounded-full bg-[var(--veda-offwhite-primary)] text-[13px] font-semibold text-[var(--veda-text-secondary)]">
-            MR
-          </span>
+          <UserAvatar className="size-9 shrink-0 rounded-full object-cover" />
           <span className="flex items-center gap-1">
             <span className="veda-label-semi text-[var(--veda-text-primary)]">
               Dhruv Honwad
@@ -117,13 +122,10 @@ export function TopBar({ title = "Exams" }: { title?: string }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="button" aria-label="Notifications" className="relative grid size-6 place-items-center">
-            <Bell className="size-5 text-[var(--veda-text-primary)]" />
-            <span className="bg-veda-orange absolute right-0 top-0 size-2 rounded-full" />
+          <button type="button" aria-label="Notifications" className="grid size-7 place-items-center">
+            <NotificationIcon className="size-7" />
           </button>
-          <span className="grid size-7 place-items-center rounded-full bg-[var(--veda-offwhite-primary)] text-[11px] font-semibold text-[var(--veda-text-secondary)]">
-            MR
-          </span>
+          <UserAvatar className="size-7 shrink-0 rounded-full object-cover" />
           <button type="button" aria-label="Menu" className="grid size-6 place-items-center">
             <Menu className="size-5 text-[var(--veda-text-primary)]" />
           </button>
