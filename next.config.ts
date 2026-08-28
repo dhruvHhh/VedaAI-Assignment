@@ -13,20 +13,27 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
 
   /**
-   * Force pdfjs's worker into the traced output for the two routes that
-   * rasterise PDFs.
+   * Force pdfjs's runtime assets into the traced output for the two routes
+   * that rasterise PDFs.
    *
-   * lib/pdf-to-images.ts imports it with a literal specifier so the tracer
-   * should already find it, but pdfjs reaches the same file through an
-   * untraceable dynamic import as well. This makes inclusion independent of
+   * The worker: lib/pdf-to-images.ts imports it with a literal specifier so
+   * the tracer should already find it, but pdfjs reaches the same file through
+   * an untraceable dynamic import as well. This makes inclusion independent of
    * that analysis holding up across bundler versions.
+   *
+   * The standard fonts: these are data files opened with fs.readFile at
+   * runtime, so no amount of import analysis would ever find them. Without
+   * them, PDFs that reference the base-14 fonts without embedding them render
+   * as blank pages on Vercel. ~800KB, only on these two routes.
    */
   outputFileTracingIncludes: {
     "/api/extract-questions": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "./node_modules/pdfjs-dist/standard_fonts/**",
     ],
     "/api/extract-answers": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "./node_modules/pdfjs-dist/standard_fonts/**",
     ],
   },
 };

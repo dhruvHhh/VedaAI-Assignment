@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createCanvas, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 
@@ -29,6 +30,44 @@ const RENDER_SCALE = 2;
 
 /** Guard against a pathological upload blowing the request budget. */
 const MAX_PAGES = 20;
+
+/**
+ * Absolute path to pdfjs's bundled standard fonts, with the trailing slash
+ * pdfjs requires.
+ *
+ * Resolved from the installed package rather than hardcoded, so it survives
+ * hoisting and pnpm-style layouts. The literal specifier is also what lets
+ * Vercel's file tracer see the dependency — same reasoning as the worker
+ * import in fileToBase64Images, and the .pfb/.ttf files themselves are pulled
+ * in by outputFileTracingIncludes in next.config.ts, since nothing imports
+ * them.
+ *
+ * Deliberately lazy and memoised, not a module-level const: during Turbopack's
+ * build-time page-data collection `import.meta.url` is a numeric module id
+ * rather than a string, so calling createRequire at module scope fails the
+ * build with ERR_INVALID_ARG_TYPE. It is only a real URL once Node actually
+ * runs the route.
+ */
+let standardFontDir: string | undefined;
+
+function getStandardFontDir(): string | undefined {
+  if (standardFontDir === undefined) {
+    try {
+      standardFontDir =
+        join(
+          dirname(
+            createRequire(import.meta.url).resolve("pdfjs-dist/package.json"),
+          ),
+          "standard_fonts",
+        ) + "/";
+    } catch {
+      // Leave it unset rather than guessing at a path: pdfjs falls back to its
+      // own handling, and a wrong directory would fail per-glyph instead.
+      standardFontDir = "";
+    }
+  }
+  return standardFontDir || undefined;
+}
 
 /**
  * Canvas factory handed to getDocument() as `CanvasFactory` (capital C in v6).
@@ -132,7 +171,25 @@ export async function fileToBase64Images(file: File): Promise<string[]> {
 
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
-    useSystemFonts: true,
+    // Where to find glyphs for the base-14 fonts (Helvetica, Times, Courier...)
+    // that PDFs are allowed to reference without embedding. Word and most
+    // exam-paper exporters do exactly that, so this is the common case, not an
+    // exotic one.
+    //
+    // We previously passed `useSystemFonts: true` instead, which tells pdfjs to
+    // substitute a font installed on the machine. That silently depends on the
+    // host: locally Windows supplies something Helvetica-ish, but Vercel's
+    // function image ships essentially no fonts, so every glyph drew as nothing
+    // and text PDFs rasterised to a blank white page. Gemini then dutifully
+    // reported zero questions — a success response with empty results, which is
+    // far worse than a crash. pdfjs's own Node default for useSystemFonts is
+    // false for this reason; we were overriding the safe default.
+    //
+    // The bundled standard fonts (Liberation, metric-compatible with Helvetica)
+    // are part of pdfjs-dist, so this renders identically everywhere.
+    // In Node, pdfjs reads this with fs.readFile, so it wants a plain directory
+    // path with a trailing slash — NOT a file:// URL.
+    standardFontDataUrl: getStandardFontDir(),
     // v6 spells this with a capital C and takes the class, not an instance.
     CanvasFactory: NapiCanvasFactory,
   });
