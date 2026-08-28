@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { createCanvas, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 
 /**
@@ -99,10 +101,37 @@ export async function fileToBase64Images(file: File): Promise<string[]> {
   // pdfjs-dist v6 ships ESM only; the legacy build is the Node-safe entry.
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
+  // Load the worker module ourselves, with a literal specifier.
+  //
+  // In Node, pdfjs disables real Workers and falls back to fetching its worker
+  // code with `await import(/*webpackIgnore: true*/ GlobalWorkerOptions.workerSrc)`,
+  // where workerSrc defaults to the relative "./pdf.worker.mjs". That specifier
+  // is a variable AND flagged webpackIgnore, so neither the bundler nor Vercel's
+  // file tracer can see it: pdf.worker.mjs is never copied into the deployed
+  // function and the route dies with "Setting up fake worker failed". Locally it
+  // works, because dev serves the complete node_modules.
+  //
+  // A literal specifier is traceable. The module also assigns
+  // globalThis.pdfjsWorker as a side effect, which pdfjs checks before falling
+  // back, so the untraceable dynamic import is never reached.
+  await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+
+  // Belt and braces: point workerSrc at the resolved file anyway. require.resolve
+  // with a literal string is a second reference the tracer understands, and a
+  // file:// URL is what dynamic import needs if it ever does run.
+  try {
+    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+      createRequire(import.meta.url).resolve(
+        "pdfjs-dist/legacy/build/pdf.worker.mjs",
+      ),
+    ).href;
+  } catch {
+    // Resolution can fail in exotic bundling setups; the import above has
+    // already registered the handler, so this is not fatal.
+  }
+
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
-    // No worker is available in a route handler; pdfjs falls back to its
-    // in-process fake worker automatically.
     useSystemFonts: true,
     // v6 spells this with a capital C and takes the class, not an instance.
     CanvasFactory: NapiCanvasFactory,
