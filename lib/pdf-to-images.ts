@@ -139,13 +139,6 @@ class NapiCanvasFactory {
   }
 }
 
-// TEMPORARY (remove after live verification): lets the route report where the
-// standard fonts resolved to, since Vercel function logs are not accessible
-// from here.
-export function __fontDiagnostics() {
-  return { standardFontDir: getStandardFontDir() ?? null, cwd: process.cwd() };
-}
-
 export function isPdf(file: { type?: string; name?: string }): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name ?? "");
 }
