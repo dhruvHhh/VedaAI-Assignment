@@ -34,28 +34,41 @@ scrolls.
 
 ## Architecture
 
-Four steps, split across two providers:
+Four steps, split across three providers:
 
 | Step | Provider | Model |
 | --- | --- | --- |
 | Extract questions | Google Gemini | `gemini-3.5-flash-lite` |
 | Extract answers | Google Gemini | `gemini-3.5-flash-lite` |
 | Map answers → questions | Groq | `openai/gpt-oss-120b` |
-| Grade all answers | Groq | `openai/gpt-oss-120b` |
+| Grade all answers | Anthropic (primary) | `claude-sonnet-5` |
+| ↳ on any failure | Groq (fallback) | `openai/gpt-oss-120b` |
 
-I split it this way because of free-tier quota. Gemini is the tighter limit of the two,
-and it's also the only one here that can actually look at an image — reading a printed
-paper and transcribing handwriting both need vision, and the answer extraction also has
-to return bounding boxes grounded in the page image. Mapping and grading never touch the
-image at all: by the time they run, the handwriting is already text. So those two go to
-Groq and the scarce vision quota stays with the two steps that genuinely need it.
+I split it this way because of free-tier quota. Gemini is the only provider here that
+can actually look at an image, and it's the tighter limit — reading a printed paper and
+transcribing handwriting both need vision, and the answer extraction also has to return
+bounding boxes grounded in the page image. Mapping and grading never touch the image at
+all: by the time they run, the handwriting is already text. So those two go elsewhere and
+the scarce vision quota stays with the two steps that genuinely need it.
 
 Grading is one batched call for the whole paper rather than one call per question. That
 was the single biggest thing for staying inside the free tier — a 30-question paper
-costs the same one call as a 3-question paper.
+costs the same one call as a 3-question paper. That stays true whichever provider marks
+it; batching is a property of the prompt, not the provider.
+
+Grading goes to Claude first because it writes noticeably better feedback for a student
+to read, and falls back to Groq automatically on *any* failure — rate limit, timeout,
+outage, malformed output, exhausted credit. The fallback isn't a redundant deployment
+concern so much as an honest one: this runs on free and trial tiers, and a grading step
+that dies when a quota runs out isn't much use to a teacher. The server log records which
+provider actually served each call.
 
 That works out to **4 API calls per session**, no matter how long the paper is: 2 Gemini
-(the extractions run concurrently) and 2 Groq.
+(the extractions run concurrently), 1 Groq for mapping, and 1 for grading. The *count* is
+fixed; the provider mix isn't. In the happy path grading is Claude, so it's 2 Gemini +
+1 Groq + 1 Anthropic. If Claude fails, that grading call becomes a Groq call instead —
+still 4 total, just 2 Groq. A failed Claude attempt doesn't add to the count in any way
+that costs quota, since a request that errors isn't a request that graded anything.
 
 ```
  upload ──► /api/extract-questions ─┐
@@ -99,10 +112,11 @@ npm run dev                        # http://localhost:3000
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | yes (unless mocking) | Question and answer extraction. Free key: <https://aistudio.google.com/apikey> |
-| `GROQ_API_KEY` | yes (unless mocking) | Mapping and grading. Free key: <https://console.groq.com/keys> |
+| `ANTHROPIC_API_KEY` | no (grading falls back) | Grading, as the primary provider. Without it every grading call falls through to Groq. Key: <https://console.anthropic.com/settings/keys> |
+| `GROQ_API_KEY` | yes (unless mocking) | Mapping, and the grading fallback. Free key: <https://console.groq.com/keys> |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | no | `true` runs the whole flow off `lib/mock-data.ts` — no keys, no network. Anything else uses the real routes. |
 
-Both free tiers cover this fine at 4 calls a session. Restart the dev server after
+The free tiers cover this fine at 4 calls a session. Restart the dev server after
 changing env vars.
 
 ### If you'd rather not set up keys

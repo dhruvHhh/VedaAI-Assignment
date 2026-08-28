@@ -30,6 +30,22 @@ interface MappingScreenProps {
   onPageChange: (page: number) => void;
 }
 
+/**
+ * The phone tab bar's selected state, which has to be spelled out in full.
+ *
+ * shadcn's default active state is `data-active:bg-background` — white — and
+ * this list sits on white-50, so out of the box the selected tab was a white
+ * pill on near-white and read as no selection at all. Buttons/Primary-85 with
+ * white text is the Figma treatment.
+ *
+ * The hover pair is not redundant: the base trigger ships `hover:text-foreground`,
+ * which outranks a plain `data-active:text-white`, so hovering the selected tab
+ * turned its label #303030 on a #303030 pill and the text vanished.
+ */
+const TAB_TRIGGER =
+  "veda-p4-medium rounded-xl py-2 data-active:bg-[var(--veda-btn-primary-85)] " +
+  "data-active:text-white data-active:hover:text-white";
+
 export function MappingScreen({
   rows,
   unmatchedBlocks,
@@ -145,11 +161,11 @@ export function MappingScreen({
       // so without it the two panels stack at every width.
       className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row!"
     >
-      <TabsList className="grid w-full shrink-0 grid-cols-2 rounded-2xl bg-[var(--veda-white-50)] p-1 lg:hidden">
-        <TabsTrigger value="questions" className="veda-p4-medium rounded-xl">
+      <TabsList className="grid h-auto w-full shrink-0 grid-cols-2 rounded-2xl bg-[var(--veda-white-50)] p-1 lg:hidden">
+        <TabsTrigger value="questions" className={TAB_TRIGGER}>
           Questions
         </TabsTrigger>
-        <TabsTrigger value="answer-sheet" className="veda-p4-medium rounded-xl">
+        <TabsTrigger value="answer-sheet" className={TAB_TRIGGER}>
           Answer Sheet
         </TabsTrigger>
       </TabsList>

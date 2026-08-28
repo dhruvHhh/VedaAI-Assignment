@@ -125,6 +125,39 @@ One cosmetic fix came out of this: the region label was a fixed 16px pill, which
 phone width swamped a ~50px-tall box and covered the first line of the answer. It
 now scales down below `lg`.
 
+### Grading provider fallback
+
+Grading calls Claude (`claude-sonnet-5`) first and falls back to Groq
+(`openai/gpt-oss-120b`) on any failure. Both paths were exercised for real; the
+fallback was not inferred from reading the code.
+
+The model id was confirmed against the live Models API rather than assumed —
+`GET /v1/models/claude-sonnet-5` returns the id exactly, and reports
+`thinking.types.enabled: false`, which is why the request uses adaptive thinking
+and sends no `temperature` (sampling parameters were removed on this generation
+and return a 400).
+
+| Test | How it was forced | Log line | Result |
+| --- | --- | --- | --- |
+| Happy path | normal run | `graded via claude` | 7 grades, 4.2-4.9s |
+| Bad credentials | `ANTHROPIC_API_KEY` overridden to an invalid value on the dev server only | `graded via groq (fallback: AuthenticationError 401 ...)` | 7 grades, 2.7s |
+| Provider outage | `ANTHROPIC_BASE_URL` pointed at a dead port | `graded via groq (fallback: APIConnectionError Connection error.)` | 7 grades, 2.5s |
+
+Both failure modes were injected as environment variables on the dev process;
+`.env.local` was never edited and the live deployment's key was never touched.
+
+Two things this shook out. The fallback reason was originally built from
+`error.name`, which the SDK's error subclasses inherit as a plain `"Error"` — so
+an outage logged as `fallback: Error` and said nothing. It now uses
+`error.constructor.name` plus the message. And the Claude client is constructed
+with `maxRetries: 0` and a 30s timeout: the SDK defaults to two retries, which on
+a real outage would have burned the grade route's whole 60s budget before Groq
+ever got a turn.
+
+Worth noting the fallback path is *faster* (2.5s vs 4.2s), because a 401 or a
+refused connection fails instantly. A slow failure is the case that costs
+something, which is what the timeout is sized for.
+
 ### Confidence calibration
 
 Initially **broken, and quietly so.** Every mapping returned `0.99`, including on a

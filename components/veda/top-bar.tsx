@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, ChevronDown, Menu } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import {
   AiSparkIcon,
   ExamsIcon,
+  MenuIcon,
   NotificationIcon,
   QuestionMarkIcon,
 } from "./figma-icons";
@@ -127,7 +128,7 @@ export function TopBar({ title = "Exams" }: { title?: string }) {
           </button>
           <UserAvatar className="size-7 shrink-0 rounded-full object-cover" />
           <button type="button" aria-label="Menu" className="grid size-6 place-items-center">
-            <Menu className="size-5 text-[var(--veda-text-primary)]" />
+            <MenuIcon className="size-6 text-[var(--veda-text-primary)]" />
           </button>
         </div>
       </header>

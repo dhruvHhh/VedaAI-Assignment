@@ -7,13 +7,16 @@ import {
   LlmParseError,
   sleep,
 } from "./llm-json";
-import type { AnswerBlock, GradeResult, Mapping, Question } from "./types";
+import type { AnswerBlock, Mapping, Question } from "./types";
 
 /**
- * Groq — the two text-only reasoning steps.
+ * Groq — the text-only reasoning provider.
  *
  * No images ever reach this module: it works purely on the strings Gemini
  * already transcribed, which is what lets the vision quota stay untouched here.
+ *
+ * Owns mapping outright. Grading lives in lib/grading.ts, which calls Claude
+ * first and falls back to `completeJson` here on any failure.
  */
 
 /**
@@ -50,8 +53,11 @@ function client(): Groq {
  *
  * Note json_object mode cannot return a bare array, so every prompt asks for an
  * object wrapping one and `asArray` unwraps it.
+ *
+ * Exported because lib/grading.ts uses it as the fallback provider when the
+ * primary grading call to Claude fails.
  */
-async function completeJson<T>(
+export async function completeJson<T>(
   systemPrompt: string,
   userPrompt: string,
   arrayKeys: string[],
@@ -190,105 +196,4 @@ export async function mapAnswers(
 
     return { questionId, answerBlockIds, status, confidence };
   });
-}
-
-/* -------------------------------------------------------------------------
- * Grading — one batched call for the whole paper
- * ------------------------------------------------------------------------- */
-
-const GRADING_SYSTEM = `You are an experienced teacher marking a student's exam script. You always reply with a single JSON object.`;
-
-function gradingPrompt(
-  questions: Question[],
-  mappings: Mapping[],
-  answerBlocks: AnswerBlock[],
-): string {
-  const questionById = new Map(questions.map((q) => [q.id, q]));
-  const blockById = new Map(answerBlocks.map((b) => [b.id, b]));
-
-  // Only matched questions need marking; unanswered ones are scored 0 locally.
-  const pairs = mappings
-    .filter((m) => m.status === "matched" && m.questionId)
-    .map((m) => ({
-      questionId: m.questionId as string,
-      question: questionById.get(m.questionId as string)?.text ?? "",
-      answer: m.answerBlockIds
-        .map((id) => blockById.get(id)?.transcribedText ?? "")
-        .join(" ")
-        .trim(),
-    }))
-    .filter((pair) => pair.question.length > 0);
-
-  return `Mark every question below in ONE response.
-
-QUESTION/ANSWER PAIRS (JSON):
-${JSON.stringify(pairs)}
-
-Reply with a JSON object of exactly this shape:
-{ "grades": [ { "questionId": string, "score": number, "maxScore": number, "feedback": string } ] }
-
-Rules:
-- Return exactly one entry for EVERY questionId listed above — no more, no fewer.
-- "maxScore" is the marks the question is worth. Infer it from what the question
-  demands: a one-word recall question is 1, a short definition 2, a derivation,
-  a three-point comparison or a "describe/explain" question 3, a full labelled
-  diagram or multi-stage explanation 5. Use whole numbers.
-- "score" is the marks earned, between 0 and maxScore. Award partial credit for
-  partially correct work.
-- "feedback" is 1-3 sentences addressed to the student. Say specifically what
-  was right and what was missing or wrong. Be constructive and concrete; never
-  just restate the score.
-- Mark the answer as written. Do not give credit for content that is not there.`;
-}
-
-export async function gradeAllAnswers(
-  questions: Question[],
-  mappings: Mapping[],
-  answerBlocks: AnswerBlock[],
-): Promise<GradeResult[]> {
-  const matched = mappings.filter((m) => m.status === "matched" && m.questionId);
-
-  // Nothing to mark — skip the call entirely rather than burning quota.
-  const graded: GradeResult[] =
-    matched.length === 0
-      ? []
-      : (
-          await completeJson<Record<string, unknown>>(
-            GRADING_SYSTEM,
-            gradingPrompt(questions, mappings, answerBlocks),
-            ["grades", "results", "data", "items"],
-          )
-        )
-          .map((item) => {
-            const maxScore = Math.max(1, Math.round(Number(item.maxScore) || 1));
-            const score = Math.min(
-              maxScore,
-              Math.max(0, Math.round(Number(item.score) || 0)),
-            );
-            return {
-              questionId: String(item.questionId ?? ""),
-              score,
-              maxScore,
-              feedback: String(item.feedback ?? "").trim(),
-            };
-          })
-          .filter((g) => g.questionId.length > 0);
-
-  // Unanswered questions never reach the model; score them here so the UI has a
-  // grade for every question.
-  const gradedIds = new Set(graded.map((g) => g.questionId));
-  const unanswered: GradeResult[] = mappings
-    .filter(
-      (m) =>
-        m.status === "unanswered" && m.questionId && !gradedIds.has(m.questionId),
-    )
-    .map((m) => ({
-      questionId: m.questionId as string,
-      score: 0,
-      maxScore: 1,
-      feedback:
-        "No answer was found for this question on the answer sheet. If it was attempted elsewhere, flag it for manual review.",
-    }));
-
-  return [...graded, ...unanswered];
 }

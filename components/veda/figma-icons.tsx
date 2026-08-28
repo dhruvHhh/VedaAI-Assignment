@@ -189,15 +189,18 @@ export function SettingsIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
 }
 
 /* -------------------------------------------------------------------------
- * AI marks. The pair is the lockup beside the label on the expanded pill; the
- * single spark is used wherever the mark stands alone in a round button, which
- * is the top bar and the collapsed rail.
+ * AI marks. The pair carries the product identity — the expanded sidebar pill
+ * and the collapsed rail's round button both use it. The single spark is the
+ * lighter-weight mark, used for the top bar's "Ask AI" action.
  * ------------------------------------------------------------------------- */
 
 /**
- * The twin-sparkle lockup beside the label on the "AI Teacher's Toolkit" pill.
- * Exported white; currentColor picks up the pill's white text so it stays
- * correct if that ever changes.
+ * The twin-sparkle lockup for "AI Teacher's Toolkit", beside the label on the
+ * expanded pill and alone in the collapsed rail's button.
+ *
+ * Exported white; currentColor picks up the white text of both so it stays
+ * correct if either ever changes. The 19x18 viewBox is not square — size it
+ * per-axis (`h-[18px] w-[19px]`) rather than with `size-*`, which squashes it.
  */
 export function AiSparkPairIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
@@ -219,9 +222,7 @@ export function AiSparkPairIcon({ className, ...props }: SVGProps<SVGSVGElement>
 }
 
 /**
- * The single spark, used in the top bar's "Ask AI" button and in the collapsed
- * rail. Preferred over the pair in a round button: the pair runs corner to
- * corner and reads lopsided once centred at that size.
+ * The single spark, used in the top bar's "Ask AI" button.
  *
  * The export wraps the path in a <filter> inner shadow (a 2px white glow at 40%
  * alpha). It is dropped here: filter ids are document-global, so an inlined one
@@ -308,6 +309,34 @@ export function NotificationIcon({ className, ...props }: SVGProps<SVGSVGElement
         <path d="M19.73 27C19.5542 27.3031 19.3019 27.5547 18.9982 27.7295C18.6946 27.9044 18.3504 27.9965 18 27.9965C17.6496 27.9965 17.3054 27.9044 17.0018 27.7295C16.6982 27.5547 16.4458 27.3031 16.27 27" />
       </g>
       <circle cx="31" cy="5" r="4" fill="var(--veda-orange)" />
+    </svg>
+  );
+}
+
+/**
+ * The phone header's menu button.
+ *
+ * A filled glyph, not a stroked one: the export draws each of the three bars as
+ * a closed rectangle in a single path (`M3 18V16H21V18H3Z...`), so the bar
+ * weight comes from the geometry and does not scale with strokeWidth. Sizing it
+ * with a `size-*` class is therefore enough — there is no stroke to keep in
+ * step, unlike the lucide icon it replaces.
+ */
+export function MenuIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+      {...props}
+    >
+      <path
+        d="M3 18V16H21V18H3ZM3 13V11H21V13H3ZM3 8V6H21V8H3Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }

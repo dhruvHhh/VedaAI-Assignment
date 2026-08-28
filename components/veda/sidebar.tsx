@@ -2,9 +2,8 @@
 
 import { ChevronsRight, PanelLeft } from "lucide-react";
 import Image from "next/image";
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import {
-  AiSparkIcon,
   AiSparkPairIcon,
   AssignmentsIcon,
   ExamsIcon,
@@ -40,6 +39,30 @@ function VedaLogo({ className }: { className?: string }) {
     />
   );
 }
+
+/**
+ * The "AI Teacher's Toolkit" treatment, shared by the expanded pill and the
+ * collapsed rail's round button — Figma gives both the identical recipe
+ * (expanded #1:10156 in the mapping/loading frames): a #272727 fill, a 4px
+ * top-to-bottom orange gradient stroke, and a white outer glow plus inner
+ * highlight. Only the shape differs, so the two callers supply their own size
+ * and radius and share everything else.
+ *
+ * The gradient ring is a two-layer background rather than a border-image: a
+ * transparent 4px border clipped to border-box lets the gradient show through
+ * only in the border ring, with the flat fill painted over the padding box.
+ * `border-radius` follows the element, which border-image cannot do.
+ */
+const AI_PILL_STYLE: CSSProperties = {
+  boxShadow:
+    "0px 32px 48px 0px rgba(255,255,255,0.2), 0px 16px 48px 0px rgba(255,255,255,0.12), inset 0px 0px 34.5px 0px rgba(255,255,255,0.25), inset 0px -1px 3.5px 0px rgba(177,177,177,0.6)",
+  outline: "4px solid transparent",
+  backgroundImage:
+    "linear-gradient(#272727, #272727), linear-gradient(180deg, rgba(255,121,80,1) 0%, rgba(192,53,10,1) 100%)",
+  backgroundOrigin: "border-box",
+  backgroundClip: "padding-box, border-box",
+  border: "4px solid transparent",
+};
 
 type NavItem = {
   label: string;
@@ -99,20 +122,11 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           <PanelLeft className="size-5 text-[var(--veda-text-secondary)]" />
         </div>
 
-        {/* "AI Teacher's Toolkit" pill — #272727 with an orange gradient ring */}
+        {/* "AI Teacher's Toolkit" pill */}
         <div className="w-[251px]">
           <div
-            className="relative flex h-[42px] items-center justify-center rounded-full bg-[#272727] px-4"
-            style={{
-              boxShadow:
-                "0px 32px 48px 0px rgba(255,255,255,0.2), 0px 16px 48px 0px rgba(255,255,255,0.12), inset 0px 0px 34.5px 0px rgba(255,255,255,0.25), inset 0px -1px 3.5px 0px rgba(177,177,177,0.6)",
-              outline: "4px solid transparent",
-              backgroundImage:
-                "linear-gradient(#272727, #272727), linear-gradient(180deg, rgba(255,121,80,1) 0%, rgba(192,53,10,1) 100%)",
-              backgroundOrigin: "border-box",
-              backgroundClip: "padding-box, border-box",
-              border: "4px solid transparent",
-            }}
+            className="relative flex h-[42px] items-center justify-center rounded-full px-4"
+            style={AI_PILL_STYLE}
           >
             <span className="flex items-center gap-2 text-white">
               <AiSparkPairIcon className="h-[18px] w-[19px] shrink-0" />
@@ -181,18 +195,20 @@ function CollapsedSidebar() {
         <VedaLogo />
 
         {/*
-          The collapsed form of the "AI Teacher's Toolkit" pill. It uses the
-          single sparkle rather than the pill's twin-sparkle lockup: that mark
-          runs corner to corner and reads lopsided once centred in a circle at
-          this size.
+          The collapsed form of the pill. Verified against Figma #1:10156: same
+          42px height, same #272727 fill, same 4px orange gradient ring, and the
+          same twin-sparkle mark (exported 19x18) — only the label is dropped and
+          the shape closes to a circle.
         */}
         <button
           type="button"
           aria-label="AI Teacher's Toolkit"
           title="AI Teacher's Toolkit"
-          className="grid size-[42px] shrink-0 place-items-center rounded-full bg-[#272727] transition-opacity hover:opacity-90"
+          className="grid size-[42px] shrink-0 place-items-center rounded-full transition-opacity hover:opacity-90"
+          style={AI_PILL_STYLE}
         >
-          <AiSparkIcon className="size-[18px] text-white" />
+          {/* 19x18 viewBox — sized per-axis, not size-*, so it is not squashed. */}
+          <AiSparkPairIcon className="h-[18px] w-[19px] shrink-0 text-white" />
         </button>
 
         <nav className="flex flex-col items-center gap-2">
