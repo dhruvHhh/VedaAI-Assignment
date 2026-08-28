@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -36,36 +37,60 @@ const MAX_PAGES = 20;
  * pdfjs requires.
  *
  * Resolved from the installed package rather than hardcoded, so it survives
- * hoisting and pnpm-style layouts. The literal specifier is also what lets
- * Vercel's file tracer see the dependency — same reasoning as the worker
- * import in fileToBase64Images, and the .pfb/.ttf files themselves are pulled
- * in by outputFileTracingIncludes in next.config.ts, since nothing imports
- * them.
+ * hoisting and pnpm-style layouts. The .pfb/.ttf files are read with
+ * fs.readFile at runtime, so nothing imports them — they reach the deployment
+ * via outputFileTracingIncludes in next.config.ts.
  *
- * Deliberately lazy and memoised, not a module-level const: during Turbopack's
- * build-time page-data collection `import.meta.url` is a numeric module id
- * rather than a string, so calling createRequire at module scope fails the
- * build with ERR_INVALID_ARG_TYPE. It is only a real URL once Node actually
- * runs the route.
+ * Two candidates, checked against the filesystem rather than trusted:
+ *
+ *  - createRequire(import.meta.url) is the correct answer when this module is
+ *    a real file on disk. Inside a bundled server chunk `import.meta.url` is
+ *    not necessarily a file URL at all (during Turbopack's build-time page
+ *    data collection it is a numeric module id, which is why this is lazy and
+ *    not a module-level const), so it can throw or resolve somewhere useless.
+ *  - process.cwd() is the deployment root on Vercel and the project root under
+ *    next dev/start, and node_modules sits directly beneath it in both.
+ *
+ * Verifying with existsSync is what makes this safe: picking a plausible but
+ * wrong directory would fail one glyph at a time and rasterise blank pages,
+ * which is the exact failure this code exists to prevent.
  */
 let standardFontDir: string | undefined;
 
 function getStandardFontDir(): string | undefined {
-  if (standardFontDir === undefined) {
-    try {
-      standardFontDir =
-        join(
-          dirname(
-            createRequire(import.meta.url).resolve("pdfjs-dist/package.json"),
-          ),
-          "standard_fonts",
-        ) + "/";
-    } catch {
-      // Leave it unset rather than guessing at a path: pdfjs falls back to its
-      // own handling, and a wrong directory would fail per-glyph instead.
-      standardFontDir = "";
+  if (standardFontDir !== undefined) return standardFontDir || undefined;
+
+  const candidates: string[] = [];
+  try {
+    candidates.push(
+      dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json")),
+    );
+  } catch {
+    // Not resolvable from here; the cwd candidate below still applies.
+  }
+  candidates.push(join(process.cwd(), "node_modules", "pdfjs-dist"));
+
+  standardFontDir = "";
+  for (const base of candidates) {
+    const dir = join(base, "standard_fonts");
+    // LiberationSans-Regular.ttf is the Helvetica stand-in, i.e. the file that
+    // actually matters for the common case.
+    if (existsSync(join(dir, "LiberationSans-Regular.ttf"))) {
+      standardFontDir = dir + "/";
+      break;
     }
   }
+
+  if (!standardFontDir) {
+    // Loud, because the symptom is otherwise a silent success: pages render
+    // blank and the vision model truthfully reports finding nothing.
+    console.error(
+      "[pdf-to-images] pdfjs standard fonts not found; PDFs that do not embed " +
+        "their fonts will render blank. Looked in:",
+      candidates.map((c) => join(c, "standard_fonts")),
+    );
+  }
+
   return standardFontDir || undefined;
 }
 
@@ -112,6 +137,13 @@ class NapiCanvasFactory {
     canvasAndContext.canvas = null;
     canvasAndContext.context = null;
   }
+}
+
+// TEMPORARY (remove after live verification): lets the route report where the
+// standard fonts resolved to, since Vercel function logs are not accessible
+// from here.
+export function __fontDiagnostics() {
+  return { standardFontDir: getStandardFontDir() ?? null, cwd: process.cwd() };
 }
 
 export function isPdf(file: { type?: string; name?: string }): boolean {

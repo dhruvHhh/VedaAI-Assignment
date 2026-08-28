@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fileToBase64Images } from "@/lib/pdf-to-images";
+import { fileToBase64Images, __fontDiagnostics } from "@/lib/pdf-to-images";
 import { extractQuestions, getActiveVisionModel } from "@/lib/vision";
 import { errorResponse } from "../_shared";
 
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
       questions,
       pageImages,
       model: getActiveVisionModel(),
+      // TEMPORARY (remove after live verification)
+      _debug: __fontDiagnostics(),
     });
   } catch (error) {
     return errorResponse("extract-questions", error);
