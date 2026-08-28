@@ -140,7 +140,9 @@ confident ones still below and dimmed. Nothing disappears.
 
 I tested this against synthetic scanned papers — out-of-order answers, answers spanning a
 page break, unanswered questions, stray unmatched writing, mobile layout, and whether the
-confidence score meant anything. Two real bugs came out of it, both of which `tsc`,
-`eslint` and `next build` were all perfectly happy with.
+confidence score meant anything. Three real bugs came out of it, all of which `tsc`,
+`eslint` and `next build` were all perfectly happy with — and two of which only existed
+on the deployed site, so I had to test against the live URL to find them at all. The
+nastiest one returned HTTP 200 with an empty result rather than failing.
 
 Notes are in **[docs/testing-notes.md](docs/testing-notes.md)**.
