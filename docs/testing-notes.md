@@ -158,10 +158,11 @@ one level** (`[[ymin, xmin, ymax, xmax]]`), which failed a strict length-4 check
 sent every box to the fallback. Tightening the prompt with an explicit
 correct/incorrect example fixed the output; the unwrapping code remains as a net.
 
-## Two real bugs found
+## Three real bugs found
 
-Both passed `tsc --noEmit`, `eslint` and `next build` cleanly. Neither was
-detectable without executing the real thing.
+All three passed `tsc --noEmit`, `eslint` and `next build` cleanly. None was
+detectable without executing the real thing, and the third was not detectable
+locally at all.
 
 ### 1. `@napi-rs/canvas` vs `node-canvas`
 
@@ -220,6 +221,50 @@ override Radix's `hidden` on the inactive tab. The comment in
 `components/veda/mapping-screen.tsx` explains why, because the `!` looks removable
 and is not.
 
+### 3. Text PDFs rendering blank on Vercel only
+
+**Symptom.** `/api/extract-questions` returned HTTP 200 with `questions: []` for a
+question paper that extracted seven questions perfectly on localhost. No error, no
+warning, no stack trace — a clean success response with nothing in it.
+
+**Why it hid.** This is the worst shape a bug can take. The pipeline did not fail;
+it succeeded at doing nothing. Dumping the returned `pageImages` to disk is what
+exposed it: both pages came back byte-identical at 11,139 bytes, which is a blank
+white PNG. The vision model was reading an empty page and truthfully reporting that
+it found no questions.
+
+**Root cause.** PDFs may reference the base-14 fonts (Helvetica, Times, Courier)
+without embedding them, which is exactly what most exam-paper exporters do. The
+call site passed `useSystemFonts: true`, which tells pdf.js to substitute a font
+installed on the host machine. Windows has one; Vercel's function image ships
+essentially none, so every glyph drew as nothing.
+
+pdf.js's own default for `useSystemFonts` in Node is `false`, precisely to avoid
+this — the option was overriding a deliberately safe default.
+
+**Fix.** Point pdf.js at the standard fonts bundled inside `pdfjs-dist`
+(Liberation, metric-compatible with Helvetica) via `standardFontDataUrl`, so
+rendering no longer depends on the host at all. Those `.pfb`/`.ttf` files are read
+with `fs.readFile` at runtime, so no import analysis can find them — they need
+`outputFileTracingIncludes`, the same treatment as `pdf.worker.mjs`. The directory
+is resolved lazily and then checked with `existsSync`, because `import.meta.url` is
+a numeric module id during Turbopack's build-time page-data collection, and because
+a plausible-but-wrong path would reintroduce the silent blank page.
+
+**Verified on the deployed URL**, not locally: the live render went from 11,139
+bytes (blank) to 42,036 / 40,985 bytes — byte-identical to the local render — and
+from 0 questions to all 7.
+
+**Side benefit.** The local render was quietly wrong too. System-font substitution
+was producing visibly broken letter spacing; the bundled Liberation fonts have
+correct Helvetica metrics.
+
+**Lesson.** Local success proved nothing here. Two of the three bugs above
+(`pdf.worker.mjs` missing from the trace, and this one) only existed in the
+deployed environment, and both stemmed from the same underlying cause: files that
+are read at runtime rather than imported are invisible to the bundler's file
+tracer.
+
 ## What is not covered
 
 - No real student handwriting has been through the pipeline. Synthetic fixtures
@@ -227,6 +272,10 @@ and is not.
   distribution of handwriting quality.
 - Confidence calibration is characterised for `openai/gpt-oss-120b` specifically.
   A different model would need the threshold re-measured.
+- JPEG 2000 and JBIG2 codecs: `pdfjs-dist/wasm/` is not traced into the deployed
+  functions. pdf.js falls back to its `*_nowasm_fallback.js` paths, and the tested
+  scans decode correctly, but a PDF from a copier that uses those codecs has not
+  been tried against the deployment.
 - No automated test suite is committed. Verification was script-driven against a
   live pipeline; making it CI-ready would mean recording provider responses so the
   tests can run without keys.
