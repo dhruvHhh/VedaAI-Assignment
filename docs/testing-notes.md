@@ -137,14 +137,41 @@ The model id was confirmed against the live Models API rather than assumed —
 and sends no `temperature` (sampling parameters were removed on this generation
 and return a 400).
 
-| Test | How it was forced | Log line | Result |
-| --- | --- | --- | --- |
-| Happy path | normal run | `graded via claude` | 7 grades, 4.2-4.9s |
-| Bad credentials | `ANTHROPIC_API_KEY` overridden to an invalid value on the dev server only | `graded via groq (fallback: AuthenticationError 401 ...)` | 7 grades, 2.7s |
-| Provider outage | `ANTHROPIC_BASE_URL` pointed at a dead port | `graded via groq (fallback: APIConnectionError Connection error.)` | 7 grades, 2.5s |
+| Test | Where | How it was forced | Log line | Result |
+| --- | --- | --- | --- | --- |
+| Happy path | local | normal run | `graded via claude` | 7 grades, 4.2-4.9s |
+| Happy path | **deployed** | normal run | `graded via claude` | 7 grades, 4.6s |
+| Bad credentials | local | `ANTHROPIC_API_KEY` overridden to an invalid value on the dev server only | `graded via groq (fallback: AuthenticationError 401 ...)` | 7 grades, 2.7s |
+| Provider outage | local | `ANTHROPIC_BASE_URL` pointed at a dead port | `graded via groq (fallback: APIConnectionError Connection error.)` | 7 grades, 2.5s |
 
 Both failure modes were injected as environment variables on the dev process;
-`.env.local` was never edited and the live deployment's key was never touched.
+`.env.local` was never edited and the deployed key was never touched. The failure
+paths are deliberately local-only — forcing an outage in production to watch it
+recover is not a trade worth making.
+
+The deployed happy path was run as a full session against the live URL (both
+extractions, mapping, then grading), and the provider was confirmed two ways: the
+`graded via claude` line in the Vercel function logs, and an independent
+behavioural check that did not need log access.
+
+That check is worth writing down, because "which model answered" is not in the
+API response. The grade endpoint takes its question/answer pairs from the request
+body, so a probe can be sent asking the marker to name its own model, and the same
+probe run against two local servers whose provider was already known from the log:
+
+| Provider | Response to the probe | Time |
+| --- | --- | --- |
+| Claude (log-confirmed) | Declines — flags it as an attempt to extract system information | 3.7s |
+| Groq (log-confirmed) | Complies — "I am GPT-4, a large language model from OpenAI", identically on 3/3 runs | 1.8-2.1s |
+| **Deployed** | Declines on 3/3 runs, same framing as Claude | 3.4-4.8s |
+
+The two providers separate cleanly and repeatably, so the deployed behaviour is
+attributable without reading a log at all. A useful property to keep: if the key
+were ever dropped from the deployment, this probe would say "I am GPT-4" instead.
+
+Incidentally, Claude treated the instruction embedded in the answer text as
+untrusted input and refused it. That is the right instinct for a pipeline whose
+model input is OCR'd handwriting that the system did not author.
 
 Two things this shook out. The fallback reason was originally built from
 `error.name`, which the SDK's error subclasses inherit as a plain `"Error"` — so
@@ -191,9 +218,9 @@ one level** (`[[ymin, xmin, ymax, xmax]]`), which failed a strict length-4 check
 sent every box to the fallback. Tightening the prompt with an explicit
 correct/incorrect example fixed the output; the unwrapping code remains as a net.
 
-## Three real bugs found
+## Four real bugs found
 
-All three passed `tsc --noEmit`, `eslint` and `next build` cleanly. None was
+All four passed `tsc --noEmit`, `eslint` and `next build` cleanly. None was
 detectable without executing the real thing, and the third was not detectable
 locally at all.
 
@@ -297,6 +324,57 @@ correct Helvetica metrics.
 deployed environment, and both stemmed from the same underlying cause: files that
 are read at runtime rather than imported are invisible to the bundler's file
 tracer.
+
+### 4. The selected tab was invisible — twice
+
+**Symptom.** On the phone layout, tapping between "Questions" and "Answer Sheet"
+changed the panel but gave no visual indication of which tab was selected.
+
+**Root cause.** Not missing styling, which is what it looked like. shadcn's
+`TabsTrigger` ships `data-active:bg-background` — white — and the list sits on
+`--veda-white-50`. So the selected tab was a white pill on near-white: fully
+styled, and invisible. Fixed with `Buttons/Primary-85` (`#303030`) and white
+text, which is the Figma treatment.
+
+**Then the fix had the same bug again.** Measuring the corrected version in a
+browser returned `bg=rgb(48,48,48) color=rgb(48,48,48)` — dark text on the dark
+pill. The base trigger also ships `hover:text-foreground`, which outranks a plain
+`data-active:text-white`, so hovering the selected tab made its label vanish.
+Needed `data-active:hover:text-white` as well.
+
+**Why it hid.** Same class as bug 2: pure cascade, invisible to the type checker
+and the build. It only appeared by reading `getComputedStyle` off a real render.
+The second half also only appeared because the check happened to leave the
+pointer resting on the element it had just clicked — a hover state that would
+otherwise have shipped unnoticed.
+
+Verified at rest and on hover, both tabs:
+
+```
+active, at rest    bg=rgb(48,48,48)  color=rgb(255,255,255)
+active, hovered    bg=rgb(48,48,48)  color=rgb(255,255,255)
+inactive           bg=transparent    color=foreground/60
+```
+
+## Design fidelity checks against Figma
+
+Two details were carried on a screenshot reading rather than the file, and were
+later checked against the frame itself (`GET /v1/files/.../nodes?ids=1:9959`,
+plus a node image export). Both had been guessed wrong in one direction or
+another:
+
+- **The collapsed rail's AI mark.** Exporting the icon node returned a 19x18
+  SVG, matching the twin-sparkle `AiSparkPairIcon` exactly and ruling out the
+  single-spark `AiSparkIcon` (21x20).
+- **That button's colour.** The frame gives `fills: ["#272727"]` — the one and
+  only occurrence of `#272727` in the file — plus a 4px gradient stroke running
+  `rgba(255,121,80)` to `rgba(192,53,10)`. So the fill was never orange, but the
+  button does carry a prominent orange ring, and the implementation had the fill
+  and no ring at all. The gradient is its own two-stop value, not the
+  `--veda-orange` token, so it is kept literal.
+
+The ring recipe is identical for the expanded pill and the collapsed button, so
+it now lives in one shared `AI_PILL_STYLE` rather than being duplicated.
 
 ## What is not covered
 

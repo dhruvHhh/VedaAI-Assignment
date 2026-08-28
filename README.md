@@ -154,9 +154,13 @@ confident ones still below and dimmed. Nothing disappears.
 
 I tested this against synthetic scanned papers — out-of-order answers, answers spanning a
 page break, unanswered questions, stray unmatched writing, mobile layout, and whether the
-confidence score meant anything. Three real bugs came out of it, all of which `tsc`,
+confidence score meant anything. Four real bugs came out of it, all of which `tsc`,
 `eslint` and `next build` were all perfectly happy with — and two of which only existed
 on the deployed site, so I had to test against the live URL to find them at all. The
 nastiest one returned HTTP 200 with an empty result rather than failing.
+
+The grading fallback is tested on both sides, not just the happy one: the Claude path and
+the Groq path were each made to run for real, the failure injected with a bad key and with
+a dead endpoint. The happy path is confirmed on the deployed site too, not only locally.
 
 Notes are in **[docs/testing-notes.md](docs/testing-notes.md)**.
