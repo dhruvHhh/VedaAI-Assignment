@@ -113,7 +113,7 @@ export async function mapAnswers(
  * Batched deliberately: one call per session rather than one per question keeps
  * the flow inside free-tier limits no matter how long the paper is.
  */
-export async function gradeAll(
+async function gradeAll(
   questions: Question[],
   mappings: Mapping[],
   answerBlocks: AnswerBlock[],
@@ -195,9 +195,9 @@ function buildPages(
  * File helpers — used by the upload screen.
  * ------------------------------------------------------------------------- */
 
-export const MAX_FILE_BYTES = 10 * 1024 * 1024; // "Max 10MB" in the Figma frame
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // "Max 10MB" in the Figma frame
 
-export const ACCEPTED_MIME_TYPES = [
+const ACCEPTED_MIME_TYPES = [
   "application/pdf",
   "image/png",
   "image/jpeg",
@@ -229,7 +229,7 @@ export function validateFile(file: File): string | null {
  * raw bytes, which is enough for a filename/size/pages summary without
  * pulling in a PDF parser. Falls back to 1 if the file can't be read.
  */
-export async function getPageCount(file: File): Promise<number> {
+async function getPageCount(file: File): Promise<number> {
   if (!file.type.includes("pdf") && !/\.pdf$/i.test(file.name)) return 1;
 
   try {

@@ -16,7 +16,7 @@ import type { AnswerBlock } from "@/lib/types";
  *   label  #34AC15 pill, 12px 12px 0 0 radius, sitting above the box
  */
 
-export const BBOX_VARIANTS = {
+const BBOX_VARIANTS = {
   /** Answer matched to the selected question. */
   matched: {
     fill: "rgba(94, 255, 53, 0.1)",
@@ -68,7 +68,7 @@ export interface BBoxRegion {
 }
 
 /** Normalized 0-1000 bbox -> CSS percentage box. */
-export function bboxToStyle(bbox: AnswerBlock["bbox"]) {
+function bboxToStyle(bbox: AnswerBlock["bbox"]) {
   const [ymin, xmin, ymax, xmax] = bbox;
   return {
     top: `${(ymin / 1000) * 100}%`,

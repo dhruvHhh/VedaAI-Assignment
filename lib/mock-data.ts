@@ -18,7 +18,7 @@ import type {
  *   - ab-05b    -> continuesFromPrevious, an answer spilling onto page 3
  */
 
-export const mockQuestions: Question[] = [
+const mockQuestions: Question[] = [
   {
     id: "1",
     text: "Define the term 'atomic number'. How does it differ from mass number?",
@@ -96,7 +96,7 @@ export const mockQuestions: Question[] = [
 /**
  * bbox is [ymin, xmin, ymax, xmax], normalized 0-1000 against the page.
  */
-export const mockAnswerBlocks: AnswerBlock[] = [
+const mockAnswerBlocks: AnswerBlock[] = [
   {
     id: "ab-01",
     page: 1,
@@ -195,7 +195,7 @@ export const mockAnswerBlocks: AnswerBlock[] = [
  * Q4, Q9 and 11(a) sit below LOW_CONFIDENCE_THRESHOLD so the dashed highlight
  * and the "Review" tag are visible without a backend.
  */
-export const mockMappings: Mapping[] = [
+const mockMappings: Mapping[] = [
   { questionId: "1", answerBlockIds: ["ab-01"], status: "matched", confidence: 0.97 },
   { questionId: "2", answerBlockIds: ["ab-02"], status: "matched", confidence: 0.94 },
   { questionId: "3", answerBlockIds: ["ab-03"], status: "matched", confidence: 0.96 },
@@ -218,7 +218,7 @@ export const mockMappings: Mapping[] = [
   { questionId: null, answerBlockIds: ["ab-stray"], status: "unmatched", confidence: 0.42 },
 ];
 
-export const mockGrades: GradeResult[] = [
+const mockGrades: GradeResult[] = [
   {
     questionId: "1",
     score: 2,
@@ -305,7 +305,7 @@ export const mockGrades: GradeResult[] = [
 /** The scan exported from the Figma mapping frame, reused for all 4 pages. */
 const MOCK_SCAN = "/figma/answer-sheet-page.png";
 
-export const mockPages: AnswerSheetPage[] = [
+const mockPages: AnswerSheetPage[] = [
   { page: 1, imageUrl: MOCK_SCAN, width: 1122, height: 1402 },
   { page: 2, imageUrl: MOCK_SCAN, width: 1122, height: 1402 },
   { page: 3, imageUrl: MOCK_SCAN, width: 1122, height: 1402 },

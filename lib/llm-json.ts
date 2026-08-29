@@ -1,10 +1,13 @@
 /**
- * Defensive JSON extraction shared by the Gemini and Groq modules.
+ * Defensive JSON extraction and error classification, shared by all three
+ * providers — Gemini (lib/vision.ts), Groq (lib/reasoning.ts) and Claude
+ * (lib/grading.ts).
  *
- * Both providers are asked for strict JSON, and both occasionally decorate it:
- * Gemini can wrap output in ```json fences despite responseMimeType, and Groq's
- * json_object mode always returns an object, so an array we asked for arrives
- * wrapped under some key. These helpers absorb both.
+ * Every provider is asked for strict JSON and every one of them decorates it
+ * differently: Gemini wraps output in ```json fences despite responseMimeType,
+ * Groq's json_object mode can only return an object so an array arrives wrapped
+ * under some key, and Claude has no enforced JSON mode at all. One parser
+ * absorbs all three, which is the point — three copies would drift.
  */
 
 export class LlmParseError extends Error {

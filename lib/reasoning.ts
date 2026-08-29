@@ -48,11 +48,6 @@ const MODEL_CHAIN = [
  */
 let activeModel: string | null = null;
 
-/** Reset between tests; not used in production. */
-export function __resetActiveModel() {
-  activeModel = null;
-}
-
 /** The chain to try, preferred model first, every other model still reachable. */
 function orderedChain(): string[] {
   if (!activeModel) return MODEL_CHAIN;

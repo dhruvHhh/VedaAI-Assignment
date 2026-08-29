@@ -13,6 +13,42 @@ import type {
   UploadSlot,
 } from "@/lib/types";
 
+/**
+ * Turns a thrown pipeline error into something a teacher can act on.
+ *
+ * The raw text is written for whoever is debugging: a failed Gemini call
+ * arrives as three lines of SDK output carrying the endpoint URL, the model id
+ * and a nested JSON payload with `@type` and `domain` fields. Showing that to
+ * someone marking papers tells them nothing about what to do next, so it is
+ * kept — see `errorDetail` — but not put in front of them.
+ *
+ * Errors are prefixed with the route that threw (`/api/extract-answers: ...`),
+ * which is the one genuinely useful part: it says which step failed.
+ */
+const STEP_LABELS: Record<string, string> = {
+  "extract-questions": "Reading the question paper",
+  "extract-answers": "Reading the answer sheet",
+  "map-answers": "Matching answers to questions",
+  grade: "Grading the answers",
+};
+
+function friendlyError(raw: string): string {
+  const step = Object.keys(STEP_LABELS).find((route) =>
+    raw.includes(`/api/${route}`),
+  );
+  const what = step ? STEP_LABELS[step] : "Extraction";
+
+  const why = /rate limit|\b429\b|quota|resource_exhausted|tokens per/i.test(raw)
+    ? "The AI service is busy right now."
+    : /api key|\b401\b|\b403\b|unauthenticated|invalid.*key/i.test(raw)
+      ? "The AI service rejected our credentials."
+      : /timeout|etimedout|aborted|fetch failed|enotfound|network/i.test(raw)
+        ? "The AI service could not be reached."
+        : "Something went wrong on the way back.";
+
+  return `${what} failed. ${why}`;
+}
+
 /** A question joined to its mapping, grade and answer blocks for rendering. */
 export interface QuestionRow {
   question: Question;
@@ -31,6 +67,8 @@ export function useToolkit() {
   const [slots, setSlots] = useState<Partial<Record<UploadSlot, SlotState>>>({});
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The raw provider error, kept for the details disclosure and the console. */
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   /** The question whose answer region is highlighted on the sheet. */
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
@@ -56,6 +94,7 @@ export function useToolkit() {
 
     setStage("extracting");
     setError(null);
+    setErrorDetail(null);
 
     try {
       const data = await runExtractionPipeline(
@@ -66,7 +105,13 @@ export function useToolkit() {
       setCurrentPage(data.pages[0]?.page ?? 1);
       setStage("mapping");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Extraction failed.");
+      const raw = err instanceof Error ? err.message : String(err);
+      // The full text still reaches anyone with a console open.
+      console.error("[pipeline]", raw);
+      setError(friendlyError(raw));
+      setErrorDetail(raw);
+      // Back to upload rather than a dead loading screen. The files are
+      // deliberately left in place so "Try again" is one click, not a re-upload.
       setStage("upload");
     }
   }, [slots.questionPaper, slots.answerSheet]);
@@ -76,6 +121,7 @@ export function useToolkit() {
     setSlots({});
     setResult(null);
     setError(null);
+    setErrorDetail(null);
     setActiveQuestionId(null);
     setCurrentPage(1);
   }, []);
@@ -147,6 +193,7 @@ export function useToolkit() {
     // flow
     stage,
     error,
+    errorDetail,
     startMapping,
     reset,
 

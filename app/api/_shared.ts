@@ -4,8 +4,10 @@ import { isRateLimitError } from "@/lib/llm-json";
 /**
  * Shared error shaping for the four AI routes.
  *
- * Keeps provider errors legible in the UI's error banner instead of surfacing
- * a bare 500, and maps rate limits to 429 so the cause is obvious.
+ * Surfaces the provider's own message instead of a bare 500, and maps rate
+ * limits to 429 so the cause is obvious. The route prefix matters: the client
+ * classifies failures by it to name the step that broke (see friendlyError in
+ * hooks/use-toolkit.ts), so it reads the raw text rather than showing it.
  */
 export function errorResponse(route: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);

@@ -41,6 +41,9 @@ export default function Page() {
               onRemove={toolkit.clearFile}
               bothUploaded={toolkit.bothUploaded}
               onStart={toolkit.startMapping}
+              error={toolkit.error}
+              errorDetail={toolkit.errorDetail}
+              onStartOver={toolkit.reset}
             />
           )}
 
@@ -59,12 +62,6 @@ export default function Page() {
           )}
         </motion.div>
       </AnimatePresence>
-
-      {toolkit.error && (
-        <p className="veda-p4 shrink-0 pb-2 text-center text-[#C0350A]">
-          {toolkit.error}
-        </p>
-      )}
     </AppShell>
   );
 }

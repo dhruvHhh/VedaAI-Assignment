@@ -8,7 +8,9 @@ import type { AnswerBlock, Question } from "@/lib/types";
 import { errorResponse } from "../_shared";
 
 export const runtime = "nodejs";
-// Measured at 2.4-4.3s (text-only, no images); 60 is ample.
+// Measured at 2.4-4.3s per attempt (text-only, no images). A failure walks the
+// three-model chain in lib/reasoning.ts, so the worst case is ~3x that; 60 is
+// still ample.
 export const maxDuration = 60;
 
 export async function POST(request: Request) {

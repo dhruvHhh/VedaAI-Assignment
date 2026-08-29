@@ -251,7 +251,8 @@ export function AiSparkIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
 }
 
 /* -------------------------------------------------------------------------
- * Top bar.
+ * Top bar (components/veda/top-bar.tsx) — the desktop bar and the phone
+ * header it swaps to below lg. MenuIcon belongs to the phone header only.
  * ------------------------------------------------------------------------- */
 
 /**

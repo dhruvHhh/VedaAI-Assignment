@@ -26,6 +26,12 @@ interface UploadScreenProps {
   onRemove: (slot: UploadSlot) => void;
   bothUploaded: boolean;
   onStart: () => void;
+  /** Human-readable failure from the last run, if it failed. */
+  error?: string | null;
+  /** Raw provider text behind `error`, shown only on request. */
+  errorDetail?: string | null;
+  /** Clears the files and the error, back to an empty upload screen. */
+  onStartOver: () => void;
 }
 
 export function UploadScreen({
@@ -35,6 +41,9 @@ export function UploadScreen({
   onRemove,
   bothUploaded,
   onStart,
+  error,
+  errorDetail,
+  onStartOver,
 }: UploadScreenProps) {
   const [errors, setErrors] = useState<Partial<Record<UploadSlot, string>>>({});
 
@@ -125,11 +134,83 @@ export function UploadScreen({
           <ArrowRight className="size-5 text-white" />
         </motion.button>
 
-        <p className="veda-helper max-w-[285px] text-center text-[var(--veda-text-secondary)] lg:max-w-none">
-          Once both files are uploaded, you&rsquo;ll able to map answers with
-          questions
-        </p>
+        {error ? (
+          <ExtractionError
+            message={error}
+            detail={errorDetail}
+            onRetry={onStart}
+            onStartOver={onStartOver}
+          />
+        ) : (
+          <p className="veda-helper max-w-[285px] text-center text-[var(--veda-text-secondary)] lg:max-w-none">
+            Once both files are uploaded, you&rsquo;ll able to map answers with
+            questions
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Shown in place of the helper text when a run fails.
+ *
+ * It sits directly under "Start Mapping" on purpose. The previous version put a
+ * raw error string at the bottom of the viewport, far from the button you would
+ * press to recover — so the message and the fix were nowhere near each other.
+ *
+ * The files stay loaded through a failure, so "Try again" re-runs the same two
+ * documents in one click. The provider's own text lives behind a disclosure:
+ * available when something needs diagnosing, out of the way when it does not.
+ */
+function ExtractionError({
+  message,
+  detail,
+  onRetry,
+  onStartOver,
+}: {
+  message: string;
+  detail?: string | null;
+  onRetry: () => void;
+  onStartOver: () => void;
+}) {
+  return (
+    <motion.div
+      role="alert"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex w-full max-w-[420px] flex-col items-center gap-3 rounded-2xl border border-[rgba(192,53,10,0.25)] bg-[rgba(255,86,35,0.06)] px-5 py-4"
+    >
+      <p className="veda-p4-medium text-center text-[#C0350A]">{message}</p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="veda-p4-medium rounded-[64px] bg-[var(--veda-text-primary)] px-5 py-2 text-white transition-transform hover:scale-[1.02]"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={onStartOver}
+          className="veda-p4-medium rounded-[64px] px-4 py-2 text-[var(--veda-text-secondary)] underline-offset-4 hover:underline"
+        >
+          Start over
+        </button>
+      </div>
+
+      {detail ? (
+        <details className="w-full">
+          <summary className="veda-p5 cursor-pointer text-center text-[var(--veda-text-muted)]">
+            Technical details
+          </summary>
+          <p className="veda-p5 mt-2 max-h-28 overflow-y-auto break-words text-[var(--veda-text-secondary)]">
+            {detail}
+          </p>
+        </details>
+      ) : null}
+    </motion.div>
   );
 }

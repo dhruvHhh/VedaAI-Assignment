@@ -185,6 +185,70 @@ Worth noting the fallback path is *faster* (2.5s vs 4.2s), because a 401 or a
 refused connection fails instantly. A slow failure is the case that costs
 something, which is what the timeout is sized for.
 
+### Extraction failure, and what the teacher actually sees
+
+Forced the same reversible way as the grading fallback above: an invalid
+`GEMINI_API_KEY` set on the dev process only, with `.env.local` untouched.
+
+The good news came first — **it never hung.** The pipeline settled in 4.0s,
+returned to the upload screen, kept both files loaded and left "Start Mapping"
+clickable. No infinite spinner, no crash, no dead loading screen.
+
+What it *showed* was the problem:
+
+```
+/api/extract-answers: [GoogleGenerativeAI Error]: Error fetching from
+https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent:
+[400 Bad Request] API key not valid. Please pass a valid API key.
+[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":...
+```
+
+Three lines of raw SDK output — the endpoint URL, the model id and a nested JSON
+payload with `@type` and `domain` fields — rendered in red at the very bottom of
+the viewport, roughly 150px below the button you would press to recover. So the
+message and the fix were nowhere near each other, it leaked internal detail, and
+none of it told a teacher what to do next.
+
+**The replacement** is an `ExtractionError` card that takes the place of the
+helper text *directly under "Start Mapping"*, so the problem and the action sit
+together:
+
+- **The step name comes from the error itself.** Failures are prefixed with the
+  route that threw, which is the one genuinely useful part of that text:
+  `/api/extract-questions` becomes "Reading the question paper",
+  `/api/extract-answers` "Reading the answer sheet", and so on.
+- **The cause is classified, not invented** — rate limit / quota to "The AI
+  service is busy right now", 401/403 to "rejected our credentials", network and
+  timeout to "could not be reached", with a neutral fallback for anything else.
+- **The raw text is preserved, not discarded**: collapsed behind a `<details>`
+  disclosure and written to `console.error`. Available when something needs
+  diagnosing, out of the way when it does not.
+- **Files survive a failure**, so "Try again" re-runs the same two documents in
+  one click rather than a re-upload. "Start over" clears everything.
+
+Verified against the same forced failure — six checks on the failure state, plus
+a happy-path control to confirm the card does not appear when nothing is wrong:
+
+| Check | Result |
+| --- | --- |
+| Card renders with the plain-language message | pass |
+| "Try again" actually re-runs the pipeline | pass (returns to Extracting) |
+| "Start over" clears the error | pass |
+| "Start over" clears the files | pass |
+| Raw provider text hidden by default | pass |
+| Both files still loaded after the failure | pass |
+| *Control:* no card on a successful run | pass |
+
+**An aside worth knowing before writing browser tests against this app.** Two of
+those assertions reported `false` on the first run and looked like a stale-state
+bug — the error card apparently surviving a reset. It was the selector. Next.js
+injects its own empty `<div role="alert" aria-live="assertive"
+id="__next-route-announcer__">` into every page, so a bare `[role="alert"]`
+matches two elements and `count() === 0` can never be true no matter how the app
+behaves. Scoping to the card (`.filter({ hasText: "failed" })`) made all seven
+pass. The app was right and the test was wrong, which is the more likely of the
+two often enough to be worth checking first.
+
 ### Confidence calibration
 
 Initially **broken, and quietly so.** Every mapping returned `0.99`, including on a

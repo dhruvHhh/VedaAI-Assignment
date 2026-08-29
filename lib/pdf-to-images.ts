@@ -139,7 +139,7 @@ class NapiCanvasFactory {
   }
 }
 
-export function isPdf(file: { type?: string; name?: string }): boolean {
+function isPdf(file: { type?: string; name?: string }): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name ?? "");
 }
 
