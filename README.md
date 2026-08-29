@@ -90,6 +90,11 @@ genuinely is fixed is the batching one: one grading call per paper, never one pe
 All four routes run on the Node runtime. PDF pages are rasterised at 2x with `pdfjs-dist`
 and `@napi-rs/canvas` before going to the vision model.
 
+Those four routes are rate limited in `proxy.ts` to 10 requests per IP per 10 minutes —
+a normal session uses 4, so this leaves room to try the flow a couple of times while
+stopping a bot from burning the free-tier quota the whole app depends on. It is an
+in-memory counter per server instance, sized for a public demo rather than production.
+
 ### Where things live
 
 ```
