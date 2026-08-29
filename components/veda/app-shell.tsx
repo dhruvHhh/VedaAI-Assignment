@@ -19,12 +19,15 @@ export function AppShell({
   collapsedSidebar = false,
   children,
   contentClassName,
+  onBack,
 }: {
   background?: "upload" | "gradient";
   /** The two blurred ellipses that glow behind the upload frames. */
   ambient?: boolean;
   /** Loading and Mapping use the 64px icon rail; Upload uses the full nav. */
   collapsedSidebar?: boolean;
+  /** Passed through to the top bar's back button; see TopBar. */
+  onBack?: () => void;
   children: React.ReactNode;
   contentClassName?: string;
 }) {
@@ -40,7 +43,7 @@ export function AppShell({
       <Sidebar collapsed={collapsedSidebar} />
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col gap-3">
-        <TopBar />
+        <TopBar onBack={onBack} />
         <main
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[40px]",

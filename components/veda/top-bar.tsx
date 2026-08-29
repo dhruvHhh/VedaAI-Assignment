@@ -57,7 +57,18 @@ function CircleButton({
   );
 }
 
-export function TopBar({ title = "Exams" }: { title?: string }) {
+export function TopBar({
+  title = "Exams",
+  onBack,
+}: {
+  title?: string;
+  /**
+   * Leaves the current screen. Only supplied once there is somewhere to go
+   * back to — on the upload screen the button is disabled rather than being a
+   * control that silently does nothing.
+   */
+  onBack?: () => void;
+}) {
   return (
     <>
       {/* ---------------------------- desktop ------------------------------ */}
@@ -65,7 +76,9 @@ export function TopBar({ title = "Exams" }: { title?: string }) {
         <button
           type="button"
           aria-label="Back"
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-white transition-colors hover:bg-[var(--veda-offwhite-20)]"
+          onClick={onBack}
+          disabled={!onBack}
+          className="grid size-10 shrink-0 place-items-center rounded-full bg-white transition-colors hover:bg-[var(--veda-offwhite-20)] disabled:cursor-default disabled:hover:bg-white"
         >
           <ArrowLeft className="size-6" />
         </button>
@@ -114,7 +127,13 @@ export function TopBar({ title = "Exams" }: { title?: string }) {
       {/* ----------------------------- phone ------------------------------- */}
       <header className="flex h-14 shrink-0 items-center justify-between rounded-2xl bg-white py-0 pl-3 pr-4 lg:hidden">
         <div className="flex items-center gap-2">
-          <button type="button" aria-label="Back" className="grid size-6 place-items-center">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={onBack}
+            disabled={!onBack}
+            className="grid size-6 place-items-center disabled:cursor-default"
+          >
             <ArrowLeft className="size-5 text-[var(--veda-text-primary)]" />
           </button>
           <span className="text-[20px] font-bold leading-[1.4] tracking-[-0.06em] text-[var(--veda-text-primary)]">

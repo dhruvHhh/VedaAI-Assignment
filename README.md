@@ -1,10 +1,9 @@
 # VedaAI — AI Teacher's Toolkit
 A teacher uploads a question paper and a student's handwritten answer sheet. The app
-reads both, figures out which answer goes with which question, highlights that answer
-on the scan, and grades it with a bit of written feedback.
+reads both, works out which answer goes with which question, highlights that answer on
+the scan, and grades it with written feedback.
 
-Next.js 16 (App Router), TypeScript, Tailwind v4, shadcn/ui, built against the Figma
-designs I was given.
+Built with Next.js 16 (App Router), TypeScript, Tailwind v4 and shadcn/ui.
 
 ![Mapping screen with an out-of-order answer highlighted](docs/images/mapping-out-of-order.png)
 
@@ -12,12 +11,12 @@ designs I was given.
 
 1. **Upload** — question paper and answer sheet, PDF or image, 10MB each.
 2. **Extract** — questions come out with their printed numbering intact, including
-   sub-parts like `11(a)` / `11(b)`. Handwriting gets transcribed into separate answer
+   sub-parts like `11(a)` / `11(b)`. Handwriting is transcribed into separate answer
    blocks, each with a bounding box saying where it sits on the page.
-3. **Map** — each answer block gets matched to a question by meaning rather than by
+3. **Map** — each answer block is matched to a question by meaning rather than by
    position, with a confidence score. Questions nobody answered are marked
    `unanswered`; writing that doesn't belong to any question is `unmatched`.
-4. **Grade** — every matched answer gets a score out of a max the model works out from
+4. **Grade** — every matched answer gets a score out of a maximum the model infers from
    the question, plus feedback.
 
 ## Screens
@@ -27,7 +26,7 @@ designs I was given.
 | **Upload — empty** | Two dropzones (Question Paper, Answer Sheet). PDF or image, max 10MB. "Start Mapping" stays disabled until both are there. |
 | **Upload — filled** | Each dropzone shows filename, size and page count, with a remove button. |
 | **Loading** | Sparkle animation and "Extracting…" while the pipeline runs. |
-| **Mapping** | Left: the extracted questions, each one collapsible with a score badge and AI feedback. Right: the answer sheet with zoom, page navigation, and a coloured box drawn over whichever answer you've selected. On phones these become two tabs instead of a split view. |
+| **Mapping** | Left: the extracted questions, each one collapsible with a score badge and AI feedback. Right: the answer sheet with zoom, page navigation, and a coloured box drawn over whichever answer is selected. On phones these become two tabs instead of a split view. |
 
 The two panels scroll independently inside a fixed viewport, so the page itself never
 scrolls.
@@ -44,38 +43,36 @@ Four steps, split across three providers:
 | Grade all answers | Anthropic (primary) | `claude-sonnet-5` |
 | ↳ on any failure | Groq (fallback) | `openai/gpt-oss-120b` |
 
-I split it this way because of free-tier quota. Gemini is the only provider here that
-can actually look at an image, and it's the tighter limit — reading a printed paper and
-transcribing handwriting both need vision, and the answer extraction also has to return
-bounding boxes grounded in the page image. Mapping and grading never touch the image at
-all: by the time they run, the handwriting is already text. So those two go elsewhere and
-the scarce vision quota stays with the two steps that genuinely need it.
+The split follows from free-tier quota. Gemini is the only provider here that can read an
+image, and it also has the tighter limit — reading a printed paper and transcribing
+handwriting both need vision, and answer extraction has to return bounding boxes grounded
+in the page image. Mapping and grading never touch the image at all: by the time they run,
+the handwriting is already text. So those two steps go elsewhere, and the scarce vision
+quota stays with the two that genuinely need it.
 
 Grading is one batched call for the whole paper rather than one call per question. That
-was the single biggest thing for staying inside the free tier — a 30-question paper
-costs the same one call as a 3-question paper. That stays true whichever provider marks
-it; batching is a property of the prompt, not the provider.
+was the single biggest saving against the free tier — a 30-question paper costs the same
+one call as a 3-question paper. It holds whichever provider marks the paper, because
+batching is a property of the prompt rather than the provider.
 
-Grading goes to Claude first because it writes noticeably better feedback for a student
-to read, and falls back to Groq automatically on *any* failure — rate limit, timeout,
-outage, malformed output, exhausted credit. The fallback isn't a redundant deployment
-concern so much as an honest one: this runs on free and trial tiers, and a grading step
-that dies when a quota runs out isn't much use to a teacher. The server log records which
-provider actually served each call.
+Grading goes to Claude first because it writes noticeably better feedback for a student to
+read, and falls back to Groq automatically on *any* failure — rate limit, timeout, outage,
+malformed output, exhausted credit. The fallback exists because of how this is hosted: on
+free and trial tiers, a grading step that stops working the moment a quota runs out is no
+use to a teacher. The server log records which provider served each call.
 
 That works out to **4 API calls in the happy path**, no matter how long the paper is:
 2 Gemini (the extractions run concurrently), 1 Groq for mapping, and 1 for grading. The
-provider mix varies — grading is Claude when it answers, Groq when it doesn't — and so,
-in the unhappy path, does the count.
+provider mix varies — grading is Claude when it answers and Groq when it doesn't — and in
+the unhappy path so does the count.
 
-I'd rather be precise than tidy about this, because "fixed at 4" isn't true: every step
-retries on a transient failure, and a retry is another call. Groq rejects its own JSON
-often enough on code-heavy scripts (roughly a third of calls on one 14-block script) that
-mapping retries up to twice before giving up; the extractions retry once. So 4 is the
-number you should expect and the number a healthy session uses, but a session that hits
-provider hiccups can spend up to 12, and none of the retried calls returned anything
-usable. The batching guarantee is the part that genuinely is fixed: one grading call per
-paper, not one per question.
+It is worth being precise here, because "fixed at 4" would not be true. Every step retries
+on a transient failure, and a retry is another call. Groq rejects its own JSON often enough
+on code-heavy scripts (roughly a third of calls on one 14-block script) that mapping
+retries up to twice before giving up; the extractions retry once. So 4 is the number to
+expect and the number a healthy session uses, but a session that hits provider problems can
+spend up to 12 — and none of those retried calls return anything usable. The guarantee that
+genuinely is fixed is the batching one: one grading call per paper, never one per question.
 
 ```
  upload ──► /api/extract-questions ─┐
@@ -83,21 +80,24 @@ paper, not one per question.
  upload ──► /api/extract-answers  ──┘
 ```
 
-All four routes run on the Node runtime. PDF pages get rasterised at 2x with
-`pdfjs-dist` + `@napi-rs/canvas` before going to the vision model.
+All four routes run on the Node runtime. PDF pages are rasterised at 2x with `pdfjs-dist`
+and `@napi-rs/canvas` before going to the vision model.
 
 ### Where things live
 
 ```
-app/api/              four route handlers, one per pipeline step
-lib/vision.ts         Gemini: question + answer extraction, bbox normalisation
-lib/reasoning.ts      Groq: mapping + batched grading
-lib/pdf-to-images.ts  PDF → 2x page images
-lib/llm-json.ts       defensive JSON parsing shared by both providers
-lib/api.ts            the only module that knows where data comes from
-lib/types.ts          the backend contract (Question, AnswerBlock, Mapping, GradeResult)
-hooks/use-toolkit.ts  flow state; joins questions ↔ mappings ↔ grades
-components/veda/      the screens
+app/api/                four route handlers, one per pipeline step
+lib/vision.ts           Gemini: question + answer extraction, bbox normalisation
+lib/reasoning.ts        Groq: mapping, and the shared model-fallback chain
+lib/grading.ts          grading: Claude first, Groq as the automatic fallback
+lib/answer-blocks.ts    splits a block that has swallowed two answers
+lib/mapping-repair.ts   guarantees every question and block appears exactly once
+lib/pdf-to-images.ts    PDF → 2x page images
+lib/llm-json.ts         defensive JSON parsing shared by all three providers
+lib/api.ts              the only module that knows where data comes from
+lib/types.ts            the backend contract (Question, AnswerBlock, Mapping, GradeResult)
+hooks/use-toolkit.ts    flow state; joins questions ↔ mappings ↔ grades
+components/veda/        the screens
 ```
 
 `lib/api.ts` is the one seam between the UI and the data. Components and hooks only ever
@@ -106,13 +106,13 @@ anything else.
 
 ## Setup
 
-Needs **Node 22.13+** — that floor comes from `pdfjs-dist` (Next itself only needs
-20.9+). `@napi-rs/canvas` is a native binding, so install it on whatever machine runs the
-server instead of copying `node_modules` between platforms.
+Needs **Node 22.13+** — that floor comes from `pdfjs-dist` (Next itself only needs 20.9+).
+`@napi-rs/canvas` is a native binding, so install it on whatever machine runs the server
+rather than copying `node_modules` between platforms.
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then fill in the two keys
+cp .env.local.example .env.local   # then fill in the keys
 npm run dev                        # http://localhost:3000
 ```
 
@@ -123,34 +123,33 @@ npm run dev                        # http://localhost:3000
 | `GROQ_API_KEY` | yes (unless mocking) | Mapping, and the grading fallback. Free key: <https://console.groq.com/keys> |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | no | `true` runs the whole flow off `lib/mock-data.ts` — no keys, no network. Anything else uses the real routes. |
 
-The free tiers cover this fine at ~4 calls a session, though Groq's is the one you can
-actually exhaust — its daily token cap is low enough that a long testing session will hit
-it. Restart the dev server after changing env vars.
+The free tiers cover normal use comfortably at around 4 calls a session. Groq's is the one
+that can realistically be exhausted: its daily token cap is low enough that a long testing
+session will reach it. Restart the dev server after changing env vars.
 
 ### If you'd rather not set up keys
 
-Set `NEXT_PUBLIC_USE_MOCK_DATA=true` and you can click through all four screens against
-a fixture with 12 questions (including `11(a)` / `11(b)`), one unanswered question, one
-unmatched stray block, and one answer that spans a page break. It's the quickest way to
-look at the UI.
+Set `NEXT_PUBLIC_USE_MOCK_DATA=true` and you can click through all four screens against a
+fixture with 12 questions (including `11(a)` / `11(b)`), one unanswered question, one
+unmatched stray block, and one answer that spans a page break. It is the quickest way to
+see the UI.
 
 ## Confidence and the "Needs review" toggle
 
-This part isn't obvious from the UI on its own, so:
+This is worth explaining, because the UI doesn't show the reasoning behind it.
 
-every mapping comes back with a `confidence` from the model. Below
-`LOW_CONFIDENCE_THRESHOLD` (currently **0.90**, in `components/veda/bbox-overlay.tsx`)
-the question row gets a muted amber **Review** tag next to its score, and the box on the
-scan is drawn dashed instead of solid — same colour, just less certain.
+Every mapping comes back with a `confidence` from the model. Below
+`LOW_CONFIDENCE_THRESHOLD` (currently **0.90**, in `components/veda/bbox-overlay.tsx`) the
+question row gets a muted amber **Review** tag next to its score, and the box on the scan
+is drawn dashed instead of solid — same colour, just less certain.
 
-The 0.90 isn't a number I picked by feel. I measured it. In practice `openai/gpt-oss-120b`
-only really uses a narrow band: about **0.95–0.99** when the answer literally has the
-question number written on it ("Ans 7:"), and **0.80–0.88** when it had to work the match
-out from the content. It basically never drops below 0.8, even on fragments I made
-deliberately ambiguous to try and push it down. So my first instinct of 0.6 was useless —
-nothing would ever have tripped it. 0.90 is the line that actually separates "the student
-numbered this" from "the model figured this out", and the second group is the one a
-teacher should glance at.
+The 0.90 is measured rather than chosen by feel. In practice `openai/gpt-oss-120b` uses
+only a narrow band: about **0.95–0.99** when the answer literally has the question number
+written on it ("Ans 7:"), and **0.80–0.88** when it had to infer the match from the
+content. It almost never drops below 0.8, even on fragments I made deliberately ambiguous
+to push it lower. My first choice of 0.6 would therefore never have triggered at all. 0.90
+is the line that actually separates "the student numbered this" from "the model worked
+this out", and the second group is the one a teacher should glance at.
 
 The **Needs review** toggle reorders the list rather than filtering it: unanswered
 questions first, then unmatched stray writing, then the low-confidence matches, with the
@@ -162,20 +161,21 @@ confident ones still below and dimmed. Nothing disappears.
 
 I tested this against synthetic scanned papers — out-of-order answers, answers spanning a
 page break, unanswered questions, stray unmatched writing, mobile layout, and whether the
-confidence score meant anything. Five real bugs came out of it, all of which `tsc`,
-`eslint` and `next build` were all perfectly happy with — and two of which only existed
-on the deployed site, so I had to test against the live URL to find them at all. The
-nastiest one returned HTTP 200 with an empty result rather than failing.
+confidence score meant anything. Five real bugs came out of it, all of which passed `tsc`,
+`eslint` and `next build` cleanly, and two of which existed only on the deployed site, so
+finding them meant testing against the live URL. The worst of them returned HTTP 200 with
+an empty result instead of failing.
 
-The grading fallback is tested on both sides, not just the happy one: the Claude path and
-the Groq path were each made to run for real, the failure injected with a bad key and with
-a dead endpoint. The happy path is confirmed on the deployed site too, not only locally.
+The grading fallback is tested on both sides rather than only the happy one: the Claude
+path and the Groq path were each made to run for real, with the failure injected using a
+bad key and a dead endpoint. The happy path is confirmed on the deployed site as well as
+locally.
 
-Two things are open rather than done, and the notes say so plainly: a real answer can
-still be attributed to the wrong question about once in every ten to fourteen runs, when
-the vision model merges two answers *and* omits the label that would let the code split
-them apart; and the retry that stops `/api/map-answers` returning 500s is unit-tested but
-its live measurement is incomplete, because I exhausted Groq's daily token budget doing
-the verification.
+Two things are open rather than finished, and the notes say so directly. A real answer can
+still be attributed to the wrong question roughly once in every ten to fourteen runs, when
+the vision model merges two answers *and* omits the label the code would use to split them
+apart. And the retry that stops `/api/map-answers` returning 500s is unit-tested, but its
+live measurement is incomplete, because I exhausted Groq's daily token budget during the
+verification.
 
 Notes are in **[docs/testing-notes.md](docs/testing-notes.md)**.

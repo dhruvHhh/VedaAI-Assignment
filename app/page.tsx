@@ -23,6 +23,11 @@ export default function Page() {
       ambient
       collapsedSidebar={!isUpload}
       contentClassName={toolkit.stage === "mapping" ? "gap-3" : undefined}
+      // Back leaves a finished result and returns to an empty upload screen —
+      // the same reset the error card's "Start over" uses, not a second copy of
+      // it. Deliberately not offered mid-extraction: the request is already in
+      // flight and would land on state the user has walked away from.
+      onBack={toolkit.stage === "mapping" ? toolkit.reset : undefined}
     >
       <AnimatePresence mode="wait">
         <motion.div
