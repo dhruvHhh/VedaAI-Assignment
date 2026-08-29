@@ -97,6 +97,36 @@ export function isRateLimitError(error: unknown): boolean {
   return /\b429\b|rate.?limit|too many requests|resource_exhausted/i.test(message);
 }
 
+/**
+ * True for a provider rejecting its *own* output as invalid JSON.
+ *
+ * Groq's `response_format: json_object` validates the completion server-side and
+ * returns HTTP 400 `json_validate_failed` when the model produces something that
+ * is not valid JSON. It reads like a client error — "Failed to validate JSON.
+ * Please adjust your prompt." — but nothing about the request was wrong: the
+ * identical body succeeds on retry. Measured at 3 failures in 8 calls on a
+ * code-heavy script, each one a hard 500 for the user.
+ *
+ * It has to be recognised separately from LlmParseError because that only
+ * covers unparseable text on a 2xx response; this failure never reaches our
+ * parser at all.
+ */
+export function isJsonValidationError(error: unknown): boolean {
+  const status = (error as { status?: number })?.status;
+  const message = error instanceof Error ? error.message : String(error);
+  // Groq emits two wordings for the same underlying condition — "Failed to
+  // validate JSON" and "Failed to generate JSON" — and matching only the first
+  // left a third of the failures unretried.
+  const looksLikeJsonValidation =
+    /json_(?:validate|generate)_failed|failed to (?:validate|generate) json/i.test(
+      message,
+    );
+
+  // Guard on the message rather than the status alone: a 400 for a genuinely
+  // malformed request is not retryable and must still fail fast.
+  return looksLikeJsonValidation && (status === undefined || status === 400);
+}
+
 /** True when a model ID does not exist for the caller's key. */
 export function isModelNotFoundError(error: unknown): boolean {
   const status = (error as { status?: number })?.status;

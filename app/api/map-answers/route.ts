@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { mapAnswers } from "@/lib/reasoning";
-import type { AnswerBlock, Mapping, Question } from "@/lib/types";
+import {
+  backfillMissingBlocks,
+  backfillMissingQuestions,
+} from "@/lib/mapping-repair";
+import type { AnswerBlock, Question } from "@/lib/types";
 import { errorResponse } from "../_shared";
 
 export const runtime = "nodejs";
@@ -24,34 +28,12 @@ export async function POST(request: Request) {
     const mappings = await mapAnswers(questions, answerBlocks);
 
     return NextResponse.json({
-      mappings: backfillMissingQuestions(mappings, questions),
+      mappings: backfillMissingBlocks(
+        backfillMissingQuestions(mappings, questions),
+        answerBlocks,
+      ),
     });
   } catch (error) {
     return errorResponse("map-answers", error);
   }
-}
-
-/**
- * The model is told every question must appear exactly once, but a long paper
- * can still lose one. Anything missing comes back as "unanswered" rather than
- * silently vanishing from the teacher's list.
- */
-function backfillMissingQuestions(
-  mappings: Mapping[],
-  questions: Question[],
-): Mapping[] {
-  const covered = new Set(
-    mappings.map((m) => m.questionId).filter((id): id is string => Boolean(id)),
-  );
-
-  const missing: Mapping[] = questions
-    .filter((question) => !covered.has(question.id))
-    .map((question) => ({
-      questionId: question.id,
-      answerBlockIds: [],
-      status: "unanswered" as const,
-      confidence: 1,
-    }));
-
-  return [...mappings, ...missing];
 }

@@ -63,12 +63,19 @@ concern so much as an honest one: this runs on free and trial tiers, and a gradi
 that dies when a quota runs out isn't much use to a teacher. The server log records which
 provider actually served each call.
 
-That works out to **4 API calls per session**, no matter how long the paper is: 2 Gemini
-(the extractions run concurrently), 1 Groq for mapping, and 1 for grading. The *count* is
-fixed; the provider mix isn't. In the happy path grading is Claude, so it's 2 Gemini +
-1 Groq + 1 Anthropic. If Claude fails, that grading call becomes a Groq call instead —
-still 4 total, just 2 Groq. A failed Claude attempt doesn't add to the count in any way
-that costs quota, since a request that errors isn't a request that graded anything.
+That works out to **4 API calls in the happy path**, no matter how long the paper is:
+2 Gemini (the extractions run concurrently), 1 Groq for mapping, and 1 for grading. The
+provider mix varies — grading is Claude when it answers, Groq when it doesn't — and so,
+in the unhappy path, does the count.
+
+I'd rather be precise than tidy about this, because "fixed at 4" isn't true: every step
+retries on a transient failure, and a retry is another call. Groq rejects its own JSON
+often enough on code-heavy scripts (roughly a third of calls on one 14-block script) that
+mapping retries up to twice before giving up; the extractions retry once. So 4 is the
+number you should expect and the number a healthy session uses, but a session that hits
+provider hiccups can spend up to 12, and none of the retried calls returned anything
+usable. The batching guarantee is the part that genuinely is fixed: one grading call per
+paper, not one per question.
 
 ```
  upload ──► /api/extract-questions ─┐
@@ -116,8 +123,9 @@ npm run dev                        # http://localhost:3000
 | `GROQ_API_KEY` | yes (unless mocking) | Mapping, and the grading fallback. Free key: <https://console.groq.com/keys> |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | no | `true` runs the whole flow off `lib/mock-data.ts` — no keys, no network. Anything else uses the real routes. |
 
-The free tiers cover this fine at 4 calls a session. Restart the dev server after
-changing env vars.
+The free tiers cover this fine at ~4 calls a session, though Groq's is the one you can
+actually exhaust — its daily token cap is low enough that a long testing session will hit
+it. Restart the dev server after changing env vars.
 
 ### If you'd rather not set up keys
 
@@ -154,7 +162,7 @@ confident ones still below and dimmed. Nothing disappears.
 
 I tested this against synthetic scanned papers — out-of-order answers, answers spanning a
 page break, unanswered questions, stray unmatched writing, mobile layout, and whether the
-confidence score meant anything. Four real bugs came out of it, all of which `tsc`,
+confidence score meant anything. Five real bugs came out of it, all of which `tsc`,
 `eslint` and `next build` were all perfectly happy with — and two of which only existed
 on the deployed site, so I had to test against the live URL to find them at all. The
 nastiest one returned HTTP 200 with an empty result rather than failing.
@@ -162,5 +170,12 @@ nastiest one returned HTTP 200 with an empty result rather than failing.
 The grading fallback is tested on both sides, not just the happy one: the Claude path and
 the Groq path were each made to run for real, the failure injected with a bad key and with
 a dead endpoint. The happy path is confirmed on the deployed site too, not only locally.
+
+Two things are open rather than done, and the notes say so plainly: a real answer can
+still be attributed to the wrong question about once in every ten to fourteen runs, when
+the vision model merges two answers *and* omits the label that would let the code split
+them apart; and the retry that stops `/api/map-answers` returning 500s is unit-tested but
+its live measurement is incomplete, because I exhausted Groq's daily token budget doing
+the verification.
 
 Notes are in **[docs/testing-notes.md](docs/testing-notes.md)**.

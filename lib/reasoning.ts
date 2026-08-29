@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import {
   asArray,
   extractJson,
+  isJsonValidationError,
   isModelNotFoundError,
   isRateLimitError,
   LlmParseError,
@@ -20,12 +21,17 @@ import type { AnswerBlock, Mapping, Question } from "./types";
  */
 
 /**
- * Groq models to try, in order; the first that answers is reused.
+ * Models to try, strongest first. A failure moves to the next one.
  *
- * llama-3.3-70b-versatile is not available on this key (404
- * "does not exist or you do not have access to it") — Groq's current catalogue
- * here carries no Llama models at all. gpt-oss-120b is the strongest remaining
- * general reasoning model and supports response_format json_object.
+ * Verified against GET /v1/models on this key rather than assumed: all three
+ * exist, and the catalogue carries no Llama models at all (llama-3.3-70b-versatile
+ * 404s) and no qwen3-32b. gpt-oss-120b is the strongest general reasoning model
+ * available and supports response_format json_object.
+ *
+ * The order deliberately changes model *family* at the first hop. The failure
+ * this chain exists for is a model unable to emit valid JSON for a particular
+ * input, which is a property of that model — so the useful second opinion comes
+ * from a different lineage, not from a smaller sibling of the same one.
  */
 const MODEL_CHAIN = [
   "openai/gpt-oss-120b",
@@ -33,8 +39,25 @@ const MODEL_CHAIN = [
   "openai/gpt-oss-20b",
 ];
 
-/** First model in the chain that answered; reused for the rest of the process. */
+/**
+ * Preferred model, set to whichever last answered so the rest of the session
+ * skips models that are unavailable on this key.
+ *
+ * It is a *preference*, not a pin. It used to collapse the chain to a single
+ * entry, which is what made retrying pointless — see completeJson.
+ */
 let activeModel: string | null = null;
+
+/** Reset between tests; not used in production. */
+export function __resetActiveModel() {
+  activeModel = null;
+}
+
+/** The chain to try, preferred model first, every other model still reachable. */
+function orderedChain(): string[] {
+  if (!activeModel) return MODEL_CHAIN;
+  return [activeModel, ...MODEL_CHAIN.filter((id) => id !== activeModel)];
+}
 
 function client(): Groq {
   const apiKey = process.env.GROQ_API_KEY;
@@ -44,12 +67,20 @@ function client(): Groq {
         "add it to .env.local and restart the dev server.",
     );
   }
-  return new Groq({ apiKey });
+  // maxRetries: 0 because this module does its own recovery by changing model.
+  // The SDK's default of 2 would silently re-send the identical request to the
+  // same model first — exactly the behaviour that proved useless — and burn the
+  // route's time budget before the chain ever advanced.
+  return new Groq({ apiKey, maxRetries: 0 });
 }
 
 /**
- * One completion with the same retry policy as the vision module:
- * 429 -> one retry after 2s, unparseable JSON -> one retry.
+ * One completion, walking the model chain until one produces usable JSON.
+ *
+ * Each model gets a single attempt; a recoverable failure falls through to the
+ * next model rather than re-asking the one that just failed. Anything we do not
+ * recognise is rethrown immediately, since a different model will not fix a bad
+ * request or a bad key.
  *
  * Note json_object mode cannot return a bare array, so every prompt asks for an
  * object wrapping one and `asArray` unwraps it.
@@ -62,41 +93,62 @@ export async function completeJson<T>(
   userPrompt: string,
   arrayKeys: string[],
 ): Promise<T[]> {
-  const modelsToTry = activeModel ? [activeModel] : MODEL_CHAIN;
+  const chain = orderedChain();
   let lastError: unknown;
 
-  for (const modelId of modelsToTry) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const completion = await client().chat.completions.create({
-          model: modelId,
-          response_format: { type: "json_object" },
-          temperature: 0.2,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        });
+  for (const modelId of chain) {
+    try {
+      const completion = await client().chat.completions.create({
+        model: modelId,
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
 
-        const text = completion.choices[0]?.message?.content ?? "";
-        const parsed = asArray<T>(extractJson(text), ...arrayKeys);
-        activeModel = modelId;
-        return parsed;
-      } catch (error) {
-        lastError = error;
+      const text = completion.choices[0]?.message?.content ?? "";
+      const parsed = asArray<T>(extractJson(text), ...arrayKeys);
+      activeModel = modelId;
+      console.log(`served by groq (${modelId})`);
+      return parsed;
+    } catch (error) {
+      lastError = error;
 
-        // A missing model is not retryable — move to the next ID.
-        if (isModelNotFoundError(error)) break;
+      // Every branch below moves to the NEXT model rather than re-sending an
+      // identical request to the one that just failed.
+      //
+      // That is the whole point. The old loop retried the same model with the
+      // same prompt, and a request was observed failing all three attempts that
+      // way: when the model cannot produce valid JSON for a given input, asking
+      // it again is not a retry, it is the same question. Failures were
+      // correlated, so repetition converged on nothing.
+      //
+      // Changing model also helps for reasons beyond JSON: Groq's token budget
+      // is per-model, so a 429 on the largest model says nothing about whether
+      // a smaller one can serve the request.
+      const reason = isModelNotFoundError(error)
+        ? "not available on this key"
+        : isRateLimitError(error)
+          ? "rate limited"
+          : isJsonValidationError(error)
+            ? "provider rejected its own JSON"
+            : error instanceof LlmParseError
+              ? "unparseable JSON in response"
+              : null;
 
-        if (isRateLimitError(error) && attempt === 0) {
-          await sleep(2000);
-          continue;
-        }
-        if (error instanceof LlmParseError && attempt === 0) {
-          continue;
-        }
-        throw error;
-      }
+      // An error we do not recognise is not something another model will fix.
+      if (reason === null) throw error;
+
+      const next = chain[chain.indexOf(modelId) + 1];
+      console.log(
+        `groq ${modelId} failed (${reason})` +
+          (next ? ` - falling through to ${next}` : " - no models left"),
+      );
+
+      // A rate limit is the one case worth pausing on; the burst may clear.
+      if (isRateLimitError(error)) await sleep(2000);
     }
   }
 

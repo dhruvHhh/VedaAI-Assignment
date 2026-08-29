@@ -218,9 +218,9 @@ one level** (`[[ymin, xmin, ymax, xmax]]`), which failed a strict length-4 check
 sent every box to the fallback. Tightening the prompt with an explicit
 correct/incorrect example fixed the output; the unwrapping code remains as a net.
 
-## Four real bugs found
+## Five real bugs found
 
-All four passed `tsc --noEmit`, `eslint` and `next build` cleanly. None was
+All five passed `tsc --noEmit`, `eslint` and `next build` cleanly. None was
 detectable without executing the real thing, and the third was not detectable
 locally at all.
 
@@ -356,6 +356,141 @@ active, hovered    bg=rgb(48,48,48)  color=rgb(255,255,255)
 inactive           bg=transparent    color=foreground/60
 ```
 
+### 5. A whole answer silently lost — three causes behind one symptom
+
+**Symptom.** On a real 6-page handwritten Solidity script, Q8 came back as
+`0/1  "No answer was found for this question on the answer sheet"` on run after
+run — while page 6 plainly contains a block labelled `A 8)` with the correct
+answer (a base `Animal` contract and a derived `Dog` overriding it). Q7 was also
+flagged for review and scored low, which turned out not to be a coincidence.
+
+Root-caused by dumping the real intermediate JSON at every stage rather than
+guessing, which mattered: the first two stages were innocent, and the third
+turned up two further defects that had nothing to do with Q8.
+
+**Not the cause (checked first).** `pdf-to-images` rendered all 6 pages
+(1783/1721/1694/1512/1574/1676 KB) and page 6 is fully legible. Extraction did
+transcribe the answer — every marker (`A 8)`, `Admin`, `Animal`, `Dog`,
+`override`, `Bark`) appeared in the output. Nothing was truncated or dropped.
+
+#### Cause 1 — non-deterministic block segmentation
+
+The vision model chooses block boundaries itself, and that choice is unstable.
+The same PDF returned **11 to 21 blocks** across runs. When page 6 came back as
+a *single* block, it held the tail of A7 followed by the whole of A8 — and
+because that block *opens* with A7's `modifier onlyOwner` code, mapping
+attributed it to Q7. Q8 was then left with no block at all:
+
+```
+p6-1 -> q7 in 5 of 6 successful mapping runs, unanswered=[8] each time
+```
+
+That is the whole symptom, including Q7's low score: Q7's matched content
+contained an entire extra answer, diluting it.
+
+*Fix, two parts.* `temperature: 0` on the Gemini call — transcription should not
+be a sampled task. **On its own this did not work**: block counts across 10 runs
+were still `20, 12, 18, 12, 15, 13, 14, 14, 18, 11`. It is kept because there is
+no reason to sample here, but the real fix is `lib/answer-blocks.ts`, which does
+not rely on model behaviour at all. The boundary is already written on the page —
+students label their answers — so a line-leading label (`A 8)`, `A8)`, `Ans 7:`,
+`Q3.`) found *mid-block* is treated as a seam and the block is split there.
+
+It caught more than the reported bug: `p4-1` was A5+A6 merged and `p5-1` was
+A6+A7 merged, both silently, on the same script.
+
+| | before | after |
+| --- | --- | --- |
+| A8 isolated in its own block | merged on 2 of 3 deployed runs | **9/10** extraction runs |
+| Q8 graded end to end | `0/1 "No answer found"` | **13/14** runs, scoring 3/3 to 5/5 |
+
+Two details worth keeping. The bbox for a split fragment is an *estimate* —
+the box is divided vertically in proportion to character offset, which assumes
+text is evenly distributed, so a dense code listing under a short heading can be
+off by a line or two. And a short (<=80 char) unlabelled run before a label is
+folded forward rather than emitted separately, because it is a heading for the
+answer below ("Inheritance.sol." above `A 8)`), not an answer of its own.
+
+#### Cause 2 — mapping dropped blocks with no signal
+
+Found while investigating the above, and worse than the original bug. On one
+14-block response the model returned well-formed JSON that simply **omitted four
+blocks** (`p3-2`, `p4-1`, `p5-1`, `p6-1`). They vanished: no error, no triage
+entry, and the four questions they belonged to were reported unanswered. The
+route already backfilled questions the model forgot; blocks had no equivalent.
+
+*Fix.* `lib/mapping-repair.ts` enforces the other half of the same guarantee —
+every block appears in exactly one mapping, anything unplaced is surfaced as
+`unmatched`, and a block claimed twice is kept only by the first claimant.
+
+Verified directly rather than by waiting for it to recur, because across 14 live
+runs it never fired (`dropped=0` every time — with cause 1 fixed the model
+stopped dropping blocks on this input). Replaying the real 4-block-drop
+response: **9/9 assertions**, covering the observed drop, the duplicate-claim
+case, and that an already-correct response is left untouched.
+
+#### Cause 3 — `/api/map-answers` returning hard 500s
+
+Groq's `response_format: json_object` validates the completion server-side and
+returns HTTP 400 when the model emits invalid JSON. It reads like a client error
+but nothing about the request is wrong — the identical body succeeds on retry.
+It was reaching the user as a 500 because the retry only caught `LlmParseError`,
+which covers unparseable text on a *2xx*; this failure never reaches the parser.
+Measured **3 hard failures in 8 calls**, then 3 in 10.
+
+Three distinct problems, each found by reading the log rather than assuming.
+
+*First*, Groq emits **two wordings** for this — `Failed to validate JSON` and
+`Failed to generate JSON` — and matching only the first left a third of the
+failures unretried. The classifier now matches `json_(validate|generate)_failed`.
+
+*Second*, retrying did not help, and the reason mattered more than the count.
+A first attempt at this raised the retry budget to three and a request was then
+observed **failing all three attempts on an identical prompt**. At the measured
+per-attempt failure rate that should happen ~3.6% of the time, so seeing it
+immediately pointed at correlated rather than independent failures: when a model
+cannot emit valid JSON for a particular input, asking the same model the same
+question again is not a retry. `activeModel` had pinned the chain to one entry
+after its first success, so every "retry" went back to the model that had just
+failed.
+
+*Fix.* The retry now **changes model** instead of repeating itself:
+`openai/gpt-oss-120b` -> `qwen/qwen3.8-27b` -> `openai/gpt-oss-20b`, one attempt
+each, with `activeModel` demoted from a pin to a preference. The order changes
+model *family* at the first hop on purpose — a second opinion from a different
+lineage is worth more than a smaller sibling of the model that just failed. The
+chain was checked against `GET /v1/models` on the live key rather than assumed:
+all three exist, and `qwen/qwen3-32b` (an obvious-looking choice) does not. The
+Groq client is also constructed with `maxRetries: 0`, since the SDK's default of
+2 would have silently re-sent the identical request to the same model first —
+precisely the behaviour that proved useless.
+
+Changing model helps for a second reason: Groq's token budget is **per model**,
+so a 429 on the largest model says nothing about whether a smaller one can serve
+the request. Rate limits now fall through the chain too.
+
+*Verified entirely with mocked tests* — `globalThis.fetch` is stubbed, so the
+real SDK, the real error shapes it throws and the real classification code all
+run, at zero quota cost. **26/26 assertions**, covering: fallthrough on the first
+model's failure; two-deep fallthrough using both real error wordings; chain
+exhaustion surfacing the error rather than inventing a result; 429 falling
+through; a 401 failing *fast* without walking the chain; a malformed 200 body
+falling through; `mapAnswers` still returning a well-formed `Mapping` after a
+first-model failure; and `activeModel` being tried first without collapsing the
+chain.
+
+**The live failure rate after this change is not measured, and that was a
+deliberate choice.** Establishing it would take dozens of real mapping calls
+against a daily budget that this investigation had already exhausted once. The
+tradeoff is defensible because this failure mode is categorically different from
+the one above: a JSON-validation failure produces a **visible 500** — loud,
+attributable, and harmless as long as it does not reach a user, which is what the
+chain now handles. The Q8 bug produced **silent data loss**, a student's answer
+marked "no answer found" with nothing on screen to suggest anything was wrong;
+that had to be hunted down and fixed whatever it cost in quota, and was. The
+exact residual percentage here remains an acknowledged unknown rather than a
+number I could honestly quote.
+
 ## Design fidelity checks against Figma
 
 Two details were carried on a screenshot reading rather than the file, and were
@@ -378,11 +513,45 @@ it now lives in one shared `AI_PILL_STYLE` rather than being duplicated.
 
 ## What is not covered
 
-- No real student handwriting has been through the pipeline. Synthetic fixtures
-  approximate the failure modes of a scan but are not a substitute for the real
-  distribution of handwriting quality.
+- Real handwriting has now been through the pipeline exactly once: a 6-page
+  handwritten Solidity assignment, which is what surfaced bug 5. One script is
+  not a distribution — it says nothing about untidy handwriting, unlabelled
+  answers, or a paper with no question numbers at all, and the synthetic
+  fixtures remain the only source of deliberate edge cases.
 - Confidence calibration is characterised for `openai/gpt-oss-120b` specifically.
   A different model would need the threshold re-measured.
+- **Answers can still be lost, roughly 1 run in 10-14.** The split in cause 1
+  needs a label in the text to cut on. When Gemini both merges two answers into
+  one block *and* omits the `A 8)` label from its transcription, there is no
+  signal left to detect the seam and the second answer is attributed to the wrong
+  question — the original bug, at a much lower rate. Measured: A8 isolated in
+  9/10 extraction runs, graded correctly in 13/14 end-to-end runs. I could not
+  reproduce the failure in 6 further targeted attempts, so I cannot characterise
+  it beyond that. A teacher would see it as one question wrongly marked
+  "no answer found". Fixing it properly means not depending on the model for
+  segmentation at all — layout-based splitting on the page image, or a
+  reconciliation pass that re-checks unanswered questions against the full
+  transcript.
+- **The `/api/map-answers` failure rate after the model-varying retry is not
+  measured.** The mechanism is verified by mocked tests (26/26) and the reasoning
+  behind it is sound — the observed failure was correlated, so a different model
+  is the remedy and repetition was not. But no number exists for how often all
+  three models fail on the same input, and none is quoted. Measuring it would
+  cost dozens of real mapping calls against a budget this work already exhausted
+  once, and the failure is a visible 500 rather than silent data loss, so it was
+  judged not worth the quota. If it matters later, the measurement is a day of
+  free-tier budget away.
+- **Groq's free tier was genuinely exhausted by this testing.** Not a theoretical
+  limit: the daily cap is 200,000 tokens per model (`openai/gpt-oss-120b`), one
+  mapping call on a 14-block script costs ~5,500 of them, and a day of repeated
+  verification runs hit `TPD: Limit 200000, Used 198414`. It is a rolling window
+  that frees a few thousand tokens every several minutes rather than resetting at
+  once, so a clean test request needed ~4 minutes of waiting. Worth knowing for
+  anyone reading the free-tier claim: it comfortably covers real use at ~4 calls
+  a session, and does not cover sustained testing. Note also that the response
+  headers expose only per-minute tokens and per-day *requests* — the per-day
+  token budget is not among them, so a small probe call returns 200 and tells you
+  nothing about whether a real call will fit.
 - JPEG 2000 and JBIG2 codecs: `pdfjs-dist/wasm/` is not traced into the deployed
   functions. pdf.js falls back to its `*_nowasm_fallback.js` paths, and the tested
   scans decode correctly, but a PDF from a copier that uses those codecs has not

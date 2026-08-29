@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { splitLabelledAnswers } from "./answer-blocks";
 import { dataUrlToInlineData } from "./pdf-to-images";
 import {
   asArray,
@@ -64,7 +65,20 @@ async function generateOnce(
 ): Promise<string> {
   const model = client().getGenerativeModel({
     model: modelId,
-    generationConfig: { responseMimeType: "application/json" },
+    generationConfig: {
+      responseMimeType: "application/json",
+      // Transcription and block segmentation should not be a creative task.
+      // At the default temperature the same 6-page script came back as
+      // anywhere from 12 to 21 blocks across runs, and on some runs two
+      // answers were merged into one block — which silently costs the student
+      // a whole question (see docs/testing-notes.md). 0 is the lowest the API
+      // accepts and makes decoding greedy.
+      //
+      // This reduces the variance but does not remove it: identical requests
+      // can still differ, so it is paired with the deterministic repair in
+      // lib/answer-blocks.ts rather than relied on alone.
+      temperature: 0,
+    },
   });
 
   const result = await model.generateContent([prompt, ...imageParts(pageImages)]);
@@ -214,7 +228,7 @@ export async function extractAnswers(pageImages: string[]): Promise<AnswerBlock[
     ["answerBlocks", "answers", "blocks", "items", "data"],
   );
 
-  return raw
+  const blocks = raw
     .map((item, index) => ({
       id: String(item.id ?? `ab-${index + 1}`),
       transcribedText: String(item.transcribedText ?? "").trim(),
@@ -223,6 +237,17 @@ export async function extractAnswers(pageImages: string[]): Promise<AnswerBlock[
       continuesFromPrevious: Boolean(item.continuesFromPrevious),
     }))
     .filter((block) => block.transcribedText.length > 0);
+
+  // Repair merged answers before anything downstream sees them. Mapping reads a
+  // block by what it opens with, so a block holding the tail of A7 followed by
+  // the whole of A8 is attributed to Q7 and Q8 is reported unanswered.
+  const split = splitLabelledAnswers(blocks);
+  if (split.length !== blocks.length) {
+    console.log(
+      `[extract-answers] split ${split.length - blocks.length} merged answer block(s): ${blocks.length} -> ${split.length}`,
+    );
+  }
+  return split;
 }
 
 /**
