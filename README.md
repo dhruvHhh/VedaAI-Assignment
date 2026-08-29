@@ -33,15 +33,21 @@ scrolls.
 
 ## Architecture
 
-Four steps, split across three providers:
+Four steps, split across two providers by default:
 
 | Step | Provider | Model |
 | --- | --- | --- |
 | Extract questions | Google Gemini | `gemini-3.5-flash-lite` |
 | Extract answers | Google Gemini | `gemini-3.5-flash-lite` |
 | Map answers → questions | Groq | `openai/gpt-oss-120b` |
-| Grade all answers | Anthropic (primary) | `claude-sonnet-5` |
-| ↳ on any failure | Groq (fallback) | `openai/gpt-oss-120b` |
+| Grade all answers | Groq | `openai/gpt-oss-120b` |
+
+Claude Sonnet 5 (`claude-sonnet-5`) is available as an optional, explicitly opt-in
+enhancement for better feedback quality, enabled with `ENABLE_CLAUDE_GRADING=true` and
+the operator's own paid Anthropic credits. It is **not** part of the default
+configuration: the brief asks for models with a free tier and Anthropic has no ongoing
+one, so grading ships on Groq. With the flag on, Claude is tried first and falls back to
+Groq automatically on any failure.
 
 The split follows from free-tier quota. Gemini is the only provider here that can read an
 image, and it also has the tighter limit — reading a printed paper and transcribing
@@ -55,16 +61,17 @@ was the single biggest saving against the free tier — a 30-question paper cost
 one call as a 3-question paper. It holds whichever provider marks the paper, because
 batching is a property of the prompt rather than the provider.
 
-Grading goes to Claude first because it writes noticeably better feedback for a student to
-read, and falls back to Groq automatically on *any* failure — rate limit, timeout, outage,
-malformed output, exhausted credit. The fallback exists because of how this is hosted: on
-free and trial tiers, a grading step that stops working the moment a quota runs out is no
-use to a teacher. The server log records which provider served each call.
+By default every text step runs on Groq, which keeps the whole app inside free tiers. If
+Claude grading is switched on, it is tried first — it writes noticeably better feedback for
+a student to read — and falls back to Groq automatically on *any* failure: rate limit,
+timeout, outage, malformed output, exhausted credit. That fallback matters because of how
+this is hosted; on free and trial tiers, a grading step that stops working the moment a
+quota runs out is no use to a teacher. The server log records which provider served each
+call.
 
 That works out to **4 API calls in the happy path**, no matter how long the paper is:
-2 Gemini (the extractions run concurrently), 1 Groq for mapping, and 1 for grading. The
-provider mix varies — grading is Claude when it answers and Groq when it doesn't — and in
-the unhappy path so does the count.
+2 Gemini (the extractions run concurrently), 1 Groq for mapping, and 1 for grading. In the
+unhappy path the count varies, and with Claude enabled so does the provider mix.
 
 It is worth being precise here, because "fixed at 4" would not be true. Every step retries
 on a transient failure, and a retry is another call. Groq rejects its own JSON often enough
@@ -89,7 +96,7 @@ and `@napi-rs/canvas` before going to the vision model.
 app/api/                four route handlers, one per pipeline step
 lib/vision.ts           Gemini: question + answer extraction, bbox normalisation
 lib/reasoning.ts        Groq: mapping, and the shared model-fallback chain
-lib/grading.ts          grading: Claude first, Groq as the automatic fallback
+lib/grading.ts          grading: Groq by default, Claude first when opted in
 lib/answer-blocks.ts    splits a block that has swallowed two answers
 lib/mapping-repair.ts   guarantees every question and block appears exactly once
 lib/pdf-to-images.ts    PDF → 2x page images
@@ -119,8 +126,9 @@ npm run dev                        # http://localhost:3000
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | yes (unless mocking) | Question and answer extraction. Free key: <https://aistudio.google.com/apikey> |
-| `ANTHROPIC_API_KEY` | no (grading falls back) | Grading, as the primary provider. Without it every grading call falls through to Groq. Key: <https://console.anthropic.com/settings/keys> |
-| `GROQ_API_KEY` | yes (unless mocking) | Mapping, and the grading fallback. Free key: <https://console.groq.com/keys> |
+| `GROQ_API_KEY` | yes (unless mocking) | Mapping and grading. Free key: <https://console.groq.com/keys> |
+| `ENABLE_CLAUDE_GRADING` | no (default `false`) | Opt-in — requires your own paid Anthropic API key, since Claude has no ongoing free tier. The app is fully free-tier-compliant without it. |
+| `ANTHROPIC_API_KEY` | only if the flag above is `true` | Claude grading. Setting this alone does nothing; the flag is what switches Claude on. Key: <https://console.anthropic.com/settings/keys> |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | no | `true` runs the whole flow off `lib/mock-data.ts` — no keys, no network. Anything else uses the real routes. |
 
 The free tiers cover normal use comfortably at around 4 calls a session. Groq's is the one

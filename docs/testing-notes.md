@@ -249,6 +249,44 @@ behaves. Scoping to the card (`.filter({ hasText: "failed" })`) made all seven
 pass. The app was right and the test was wrong, which is the more likely of the
 two often enough to be worth checking first.
 
+### Claude grading behind an opt-in flag
+
+A compliance change rather than a bug fix, recorded here because it changes what
+the shipped default actually does.
+
+The brief asks for models with a free tier. Anthropic does not have an ongoing
+one — only a one-off trial credit — so Claude could not stay the silent default
+without putting the app outside that constraint. It was not removed, because the
+feedback it writes is better and the fallback around it is already tested
+(see "Grading provider fallback" above). It is gated instead: grading runs on
+Groq unless `ENABLE_CLAUDE_GRADING=true`, in which case the existing
+Claude-first-then-Groq path runs exactly as built.
+
+The flag is checked rather than the key, and that distinction is the point. Had
+this keyed off `ANTHROPIC_API_KEY` alone, an operator with a key in their
+environment for something else would start spending credits here without ever
+choosing to. A variable that says the words is unambiguous; a key lying around
+is not.
+
+Verified with real sessions against the same fixture, reading the server log for
+which provider actually served each call:
+
+| `ENABLE_CLAUDE_GRADING` | `ANTHROPIC_API_KEY` | Log line | Requests to api.anthropic.com |
+| --- | --- | --- | --- |
+| unset | **present** | `graded via groq (claude not enabled)` | **0** |
+| `true` | present | `graded via claude` | 1 |
+| `true` | missing | warning, then `graded via groq (claude not enabled)` | 0 |
+
+The first row is the one that matters: a valid Anthropic key was sitting in
+`.env.local` throughout and grading still went straight to Groq, with zero
+outbound requests to Anthropic in the log. The third row warns once at the point
+of decision rather than letting every grading call throw and recover, so an
+operator who asked for Claude and is not getting it finds out immediately.
+
+Both grading paths converge on one `finalise()` step that clamps scores and
+backfills unanswered questions, so a paper marked by Groq is shaped identically
+to one marked by Claude — only the wording of the feedback differs.
+
 ### Confidence calibration
 
 Initially **broken, and quietly so.** Every mapping returned `0.99`, including on a

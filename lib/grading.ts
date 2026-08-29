@@ -4,7 +4,7 @@ import { completeJson } from "./reasoning";
 import type { AnswerBlock, GradeResult, Mapping, Question } from "./types";
 
 /**
- * Grading — Claude first, Groq as an automatic fallback.
+ * Grading — Groq by default; Claude first only when explicitly opted in.
  *
  * Both providers get the same prompt and the same normalisation, so a paper
  * marked by the fallback is shaped identically to one marked by Claude; only
@@ -12,10 +12,12 @@ import type { AnswerBlock, GradeResult, Mapping, Question } from "./types";
  * whole paper is still marked in ONE request — batching is a property of the
  * prompt, not of the provider.
  *
- * Grading is the only step that behaves this way. Mapping stays on Groq alone
- * (lib/reasoning.ts): it is the step whose output the UI's confidence
+ * Grading is the only step with a second provider at all. Mapping stays on Groq
+ * alone (lib/reasoning.ts): it is the step whose output the UI's confidence
  * thresholds were calibrated against, and swapping models under it would
  * silently re-scale those numbers.
+ *
+ * See claudeEnabled() for why Claude is opt-in rather than the default.
  */
 
 /**
@@ -35,6 +37,36 @@ const CLAUDE_MODEL = "claude-sonnet-5";
  * ceiling for the primary and still leaves ~25s of headroom.
  */
 const CLAUDE_TIMEOUT_MS = 30_000;
+
+/**
+ * Whether to try Claude at all. Off unless explicitly switched on.
+ *
+ * The brief this was built for asks for models with a free tier. Anthropic does
+ * not have an ongoing one — only a one-off trial credit — so Claude cannot be
+ * the default without quietly putting the app outside that constraint. It stays
+ * in the codebase because it writes better feedback and the fallback around it
+ * is already tested, but reaching it now takes a deliberate decision.
+ *
+ * The flag is checked instead of the key on purpose. Keying off
+ * ANTHROPIC_API_KEY alone would mean an operator who happens to have one in
+ * their environment for something else starts spending credits here without
+ * ever choosing to. An env var that says the words is unambiguous; a key
+ * lying around is not.
+ */
+function claudeEnabled(): boolean {
+  if (process.env.ENABLE_CLAUDE_GRADING !== "true") return false;
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    // Say so once, plainly, instead of letting every grading call throw and
+    // recover: the operator asked for Claude and is not getting it.
+    console.warn(
+      "[grading] ENABLE_CLAUDE_GRADING is true but ANTHROPIC_API_KEY is not set - grading will use Groq only.",
+    );
+    return false;
+  }
+
+  return true;
+}
 
 function claudeClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -183,6 +215,17 @@ export async function gradeAllAnswers(
   if (matched.length > 0) {
     const prompt = gradingPrompt(questions, mappings, answerBlocks);
 
+    if (!claudeEnabled()) {
+      // The shipped default: Groq alone, the same model chain mapping uses.
+      raw = await completeJson<Record<string, unknown>>(
+        GRADING_SYSTEM,
+        prompt,
+        GRADE_ARRAY_KEYS,
+      );
+      console.log("graded via groq (claude not enabled)");
+      return finalise(raw, mappings);
+    }
+
     try {
       raw = await gradeWithClaude(prompt);
       console.log("graded via claude");
@@ -199,6 +242,21 @@ export async function gradeAllAnswers(
     }
   }
 
+  return finalise(raw, mappings);
+}
+
+/**
+ * Shared shaping for whichever provider marked the paper: clamp the model's
+ * numbers, then score the questions it never saw.
+ *
+ * Both grading paths end here so a paper marked by Groq is shaped identically
+ * to one marked by Claude — the only difference between them should be the
+ * wording of the feedback.
+ */
+function finalise(
+  raw: Record<string, unknown>[],
+  mappings: Mapping[],
+): GradeResult[] {
   const graded: GradeResult[] = raw
     .map((item) => {
       const maxScore = Math.max(1, Math.round(Number(item.maxScore) || 1));
