@@ -192,3 +192,11 @@ live measurement is incomplete, because I exhausted Groq's daily token budget du
 verification.
 
 Notes are in **[docs/testing-notes.md](docs/testing-notes.md)**.
+
+## Post-submission note
+
+After submitting, I looked into whether NVIDIA's Nemotron 3 ultra model via OpenRouter could have been a better fit than Groq for mapping and grading. NIM's free tier is rate-limited per minute rather than by a 
+fixed daily token budget, which would likely have avoided the Groq quota 
+exhaustion documented in `docs/testing-notes.md`. I didn't switch to it 
+here, since this was identified after the build was already complete and 
+tested — but it's a choice worth evaluating for a future improvement, alongside verifying its actual free-tier consistency and its raw speed against Groq's.
